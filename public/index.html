@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <title>FireFriends</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Lilita+One&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
 <style>
 /* Visual único (HUD de jogo sobre a cena 3D): tinta clara sobre painéis azul-noite, amarelo de destaque. */
 :root {
@@ -37,8 +37,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 }
 #lobby .topbar, #lobby .panel, #lobby .play, #lobby .tabs { pointer-events: auto; }
 .topbar { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.brand { width: 170px; line-height: 0; }
-.brand svg, .loadLogo svg { width: 100%; height: auto; display: block; overflow: visible; }
+.brand { width: 200px; line-height: 0; }
+.brand img, .loadLogo img { width: 100%; height: auto; display: block; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .35)); }
 .loadLogo { width: min(520px, 86vw); }
 .tabs { display: flex; gap: 4px; }
 .tab {
@@ -196,61 +196,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 <section id="lobby" class="screen">
   <header class="topbar">
-    <div class="brand"><svg class="ff-logo" viewBox="0 -44 640 404" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FireFriends">
-  <defs>
-    <linearGradient id="ffFire" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff6b0"/><stop offset=".35" stop-color="#ffc21a"/><stop offset=".7" stop-color="#ff7a00"/><stop offset="1" stop-color="#e2380c"/>
-    </linearGradient>
-    <linearGradient id="ffSteel" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset=".42" stop-color="#cfe6ff"/><stop offset=".5" stop-color="#5aa3f2"/><stop offset="1" stop-color="#1d5fc4"/>
-    </linearGradient>
-    <linearGradient id="ffGold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#f2b322"/><stop offset="1" stop-color="#a8660a"/>
-    </linearGradient>
-    <linearGradient id="ffRibbon" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ff5a4a"/><stop offset=".55" stop-color="#d0201e"/><stop offset="1" stop-color="#8e0f14"/>
-    </linearGradient>
-    <linearGradient id="ffHelmet" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#9fd0ff"/><stop offset=".45" stop-color="#3f7fd6"/><stop offset="1" stop-color="#1b3f86"/>
-    </linearGradient>
-    <linearGradient id="ffShine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="ffDrop" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="#050a24" flood-opacity=".55"/>
-    </filter>
-  </defs>
-  <g filter="url(#ffDrop)">
-    <!-- emblema: capacete tático com chama -->
-    <g transform="translate(320 110)">
-      <path d="M-46 -40 C-60 -62 -42 -80 -34 -98 C-26 -82 -22 -72 -12 -68 C-18 -94 -2 -116 8 -134 C14 -108 30 -96 24 -70 C34 -76 42 -90 42 -104 C62 -78 60 -54 46 -40 Z" fill="#0b1440" stroke="#0b1440" stroke-width="14" stroke-linejoin="round"/>
-      <path d="M-46 -40 C-60 -62 -42 -80 -34 -98 C-26 -82 -22 -72 -12 -68 C-18 -94 -2 -116 8 -134 C14 -108 30 -96 24 -70 C34 -76 42 -90 42 -104 C62 -78 60 -54 46 -40 Z" fill="url(#ffFire)" stroke="#ffe27a" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M-74 22 C-74 -36 -40 -62 0 -62 C40 -62 74 -36 74 22 L86 30 C88 40 80 46 70 44 L-70 44 C-80 46 -88 40 -86 30 Z" fill="#0b1440" stroke="#0b1440" stroke-width="16" stroke-linejoin="round"/>
-      <path d="M-74 22 C-74 -36 -40 -62 0 -62 C40 -62 74 -36 74 22 L86 30 C88 40 80 46 70 44 L-70 44 C-80 46 -88 40 -86 30 Z" fill="url(#ffHelmet)" stroke="url(#ffGold)" stroke-width="5" stroke-linejoin="round"/>
-      <path d="M-58 -6 C-54 -38 -28 -52 0 -52 C24 -52 44 -42 52 -24 C30 -36 -24 -38 -58 -6 Z" fill="url(#ffShine)"/>
-      <rect x="-58" y="2" width="116" height="30" rx="15" fill="#0b1440"/>
-      <rect x="-52" y="7" width="48" height="20" rx="10" fill="#ffb21a"/>
-      <rect x="4" y="7" width="48" height="20" rx="10" fill="#ffb21a"/>
-      <rect x="-48" y="9" width="20" height="6" rx="3" fill="#fff6c8" opacity=".9"/>
-      <rect x="8" y="9" width="20" height="6" rx="3" fill="#fff6c8" opacity=".9"/>
-      <path d="M-6 -60 L6 -60 L6 2 L-6 2 Z" fill="url(#ffGold)" stroke="#0b1440" stroke-width="3"/>
-    </g>
-    <!-- fita -->
-    <g transform="translate(320 300)">
-      <path d="M-210 -20 L-250 -6 L-226 14 L-250 34 L-196 30 Z M210 -20 L250 -6 L226 14 L250 34 L196 30 Z" fill="#8e0f14" stroke="#0b1440" stroke-width="6" stroke-linejoin="round"/>
-      <path d="M-206 -26 Q0 -6 206 -26 L200 30 Q0 50 -200 30 Z" fill="url(#ffRibbon)" stroke="#0b1440" stroke-width="7" stroke-linejoin="round"/>
-      <path d="M-200 -18 Q0 2 200 -18" fill="none" stroke="#ffd25a" stroke-width="3" opacity=".9"/>
-      <path d="M-196 22 Q0 42 196 22" fill="none" stroke="#ffd25a" stroke-width="3" opacity=".9"/>
-      <text x="0" y="17" text-anchor="middle" font-family="'Lilita One','Russo One',Impact,sans-serif" font-size="30" letter-spacing="5" fill="#fff6dc" stroke="#5a0610" stroke-width="5" paint-order="stroke">BATTLE ROYALE</text>
-    </g>
-    <!-- letreiro -->
-    <g font-family="'Lilita One','Russo One',Impact,sans-serif" font-size="100" text-anchor="middle" transform="translate(320 258) skewX(-6)">
-      <text x="0" y="0" letter-spacing="1" fill="#0b1440" stroke="#0b1440" stroke-width="30" stroke-linejoin="round"><tspan>FIRE</tspan><tspan>FRIENDS</tspan></text>
-      <text x="0" y="0" letter-spacing="1" fill="none" stroke="url(#ffGold)" stroke-width="12" stroke-linejoin="round"><tspan>FIRE</tspan><tspan>FRIENDS</tspan></text>
-      <text x="0" y="0" letter-spacing="1" stroke="#0b1440" stroke-width="3" stroke-linejoin="round"><tspan fill="url(#ffFire)">FIRE</tspan><tspan fill="url(#ffSteel)">FRIENDS</tspan></text>
-    </g>
-  </g>
-</svg></div>
+    <div class="brand"><img src="logo/firefriends.webp" alt="FireFriends" width="900" height="485"></div>
     <nav class="tabs" aria-label="Menu do lobby">
       <button class="tab on" type="button" data-tab="play">Jogar</button>
       <button class="tab" type="button" data-tab="locker">Personagens</button>
@@ -378,61 +324,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   </div>
 </section>
 
-<div id="loading"><div class="loadLogo"><svg class="ffL-logo" viewBox="0 -44 640 404" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FireFriends">
-  <defs>
-    <linearGradient id="ffLFire" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#ffLf6b0"/><stop offLset=".35" stop-color="#ffLc21a"/><stop offLset=".7" stop-color="#ffL7a00"/><stop offLset="1" stop-color="#e2380c"/>
-    </linearGradient>
-    <linearGradient id="ffLSteel" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#ffLffLffL"/><stop offLset=".42" stop-color="#cfe6ffL"/><stop offLset=".5" stop-color="#5aa3f2"/><stop offLset="1" stop-color="#1d5fc4"/>
-    </linearGradient>
-    <linearGradient id="ffLGold" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#ffLf1a8"/><stop offLset=".5" stop-color="#f2b322"/><stop offLset="1" stop-color="#a8660a"/>
-    </linearGradient>
-    <linearGradient id="ffLRibbon" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#ffL5a4a"/><stop offLset=".55" stop-color="#d0201e"/><stop offLset="1" stop-color="#8e0f14"/>
-    </linearGradient>
-    <linearGradient id="ffLHelmet" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#9fd0ffL"/><stop offLset=".45" stop-color="#3f7fd6"/><stop offLset="1" stop-color="#1b3f86"/>
-    </linearGradient>
-    <linearGradient id="ffLShine" x1="0" y1="0" x2="0" y2="1">
-      <stop offLset="0" stop-color="#ffLf" stop-opacity=".85"/><stop offLset="1" stop-color="#ffLf" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="ffLDrop" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="#050a24" flood-opacity=".55"/>
-    </filter>
-  </defs>
-  <g filter="url(#ffLDrop)">
-    <!-- emblema: capacete tático com chama -->
-    <g transform="translate(320 110)">
-      <path d="M-46 -40 C-60 -62 -42 -80 -34 -98 C-26 -82 -22 -72 -12 -68 C-18 -94 -2 -116 8 -134 C14 -108 30 -96 24 -70 C34 -76 42 -90 42 -104 C62 -78 60 -54 46 -40 Z" fill="#0b1440" stroke="#0b1440" stroke-width="14" stroke-linejoin="round"/>
-      <path d="M-46 -40 C-60 -62 -42 -80 -34 -98 C-26 -82 -22 -72 -12 -68 C-18 -94 -2 -116 8 -134 C14 -108 30 -96 24 -70 C34 -76 42 -90 42 -104 C62 -78 60 -54 46 -40 Z" fill="url(#ffLFire)" stroke="#ffLe27a" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M-74 22 C-74 -36 -40 -62 0 -62 C40 -62 74 -36 74 22 L86 30 C88 40 80 46 70 44 L-70 44 C-80 46 -88 40 -86 30 Z" fill="#0b1440" stroke="#0b1440" stroke-width="16" stroke-linejoin="round"/>
-      <path d="M-74 22 C-74 -36 -40 -62 0 -62 C40 -62 74 -36 74 22 L86 30 C88 40 80 46 70 44 L-70 44 C-80 46 -88 40 -86 30 Z" fill="url(#ffLHelmet)" stroke="url(#ffLGold)" stroke-width="5" stroke-linejoin="round"/>
-      <path d="M-58 -6 C-54 -38 -28 -52 0 -52 C24 -52 44 -42 52 -24 C30 -36 -24 -38 -58 -6 Z" fill="url(#ffLShine)"/>
-      <rect x="-58" y="2" width="116" height="30" rx="15" fill="#0b1440"/>
-      <rect x="-52" y="7" width="48" height="20" rx="10" fill="#ffLb21a"/>
-      <rect x="4" y="7" width="48" height="20" rx="10" fill="#ffLb21a"/>
-      <rect x="-48" y="9" width="20" height="6" rx="3" fill="#ffLf6c8" opacity=".9"/>
-      <rect x="8" y="9" width="20" height="6" rx="3" fill="#ffLf6c8" opacity=".9"/>
-      <path d="M-6 -60 L6 -60 L6 2 L-6 2 Z" fill="url(#ffLGold)" stroke="#0b1440" stroke-width="3"/>
-    </g>
-    <!-- fita -->
-    <g transform="translate(320 300)">
-      <path d="M-210 -20 L-250 -6 L-226 14 L-250 34 L-196 30 Z M210 -20 L250 -6 L226 14 L250 34 L196 30 Z" fill="#8e0f14" stroke="#0b1440" stroke-width="6" stroke-linejoin="round"/>
-      <path d="M-206 -26 Q0 -6 206 -26 L200 30 Q0 50 -200 30 Z" fill="url(#ffLRibbon)" stroke="#0b1440" stroke-width="7" stroke-linejoin="round"/>
-      <path d="M-200 -18 Q0 2 200 -18" fill="none" stroke="#ffLd25a" stroke-width="3" opacity=".9"/>
-      <path d="M-196 22 Q0 42 196 22" fill="none" stroke="#ffLd25a" stroke-width="3" opacity=".9"/>
-      <text x="0" y="17" text-anchor="middle" font-family="'Lilita One','Russo One',Impact,sans-serif" font-size="30" letter-spacing="5" fill="#ffLf6dc" stroke="#5a0610" stroke-width="5" paint-order="stroke">BATTLE ROYALE</text>
-    </g>
-    <!-- letreiro -->
-    <g font-family="'Lilita One','Russo One',Impact,sans-serif" font-size="100" text-anchor="middle" transform="translate(320 258) skewX(-6)">
-      <text x="0" y="0" letter-spacing="1" fill="#0b1440" stroke="#0b1440" stroke-width="30" stroke-linejoin="round"><tspan>FIRE</tspan><tspan>FRIENDS</tspan></text>
-      <text x="0" y="0" letter-spacing="1" fill="none" stroke="url(#ffLGold)" stroke-width="12" stroke-linejoin="round"><tspan>FIRE</tspan><tspan>FRIENDS</tspan></text>
-      <text x="0" y="0" letter-spacing="1" stroke="#0b1440" stroke-width="3" stroke-linejoin="round"><tspan fill="url(#ffLFire)">FIRE</tspan><tspan fill="url(#ffLSteel)">FRIENDS</tspan></text>
-    </g>
-  </g>
-</svg></div><span id="loadTxt">CARREGANDO…</span></div>
+<div id="loading"><div class="loadLogo"><img src="logo/firefriends.webp" alt="FireFriends" width="900" height="485"></div><span id="loadTxt">CARREGANDO…</span></div>
 
 <script type="importmap">
 { "imports": {
