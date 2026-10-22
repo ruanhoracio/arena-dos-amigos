@@ -1,4 +1,4 @@
-# Arena dos Amigos
+# FireFriends
 
 Battle royale no navegador para jogar online com os amigos. Three.js no cliente, Cloudflare Workers + Durable Objects nas salas.
 
