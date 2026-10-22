@@ -182,7 +182,27 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .box .big { font-family: var(--font-d); font-size: 64px; color: var(--ink); line-height: 1; }
 .box .row { display: flex; gap: 10px; justify-content: center; }
 .ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; font-size: 16px; padding: 10px 14px; }
-#loading { position: fixed; inset: 0; z-index: 40; display: grid; place-content: center; justify-items: center; gap: 18px; background: radial-gradient(circle at 50% 40%, #2f7bff, #0b1f6e 70%) !important; font-family: var(--font-d); font-size: 22px; letter-spacing: 2px; }
+#loading { position: fixed; inset: 0; z-index: 40; display: grid; place-content: center; justify-items: center; gap: 18px; overflow: hidden; background: radial-gradient(circle at 50% 40%, #2f7bff, #0b1f6e 70%) !important; font-family: var(--font-d); font-size: 22px; letter-spacing: 2px; transition: opacity .6s ease; }
+#loading.out { opacity: 0; pointer-events: none; }
+#loading > * { position: relative; }
+/* abertura: raios girando, brasas subindo, logo entrando com pulo e barra enchendo */
+#loading .rays { position: absolute; left: 50%; top: 42%; width: 240vmax; height: 240vmax; margin: -120vmax 0 0 -120vmax; background: repeating-conic-gradient(from 0deg, rgba(255, 220, 120, .11) 0 9deg, transparent 9deg 18deg); -webkit-mask: radial-gradient(circle, #000 0, transparent 38%); mask: radial-gradient(circle, #000 0, transparent 38%); animation: raySpin 18s linear infinite; }
+#loading .glow { position: absolute; left: 50%; top: 42%; width: 70vmin; height: 70vmin; margin: -35vmin 0 0 -35vmin; border-radius: 50%; background: radial-gradient(circle, rgba(255, 170, 40, .55), transparent 65%); animation: glowPulse 1.6s ease-in-out infinite; }
+#loading .embers { position: absolute; inset: 0; }
+#loading .embers i { position: absolute; bottom: -12px; width: 6px; height: 6px; border-radius: 50%; background: #ffcf4a; box-shadow: 0 0 10px 3px rgba(255, 140, 0, .8); animation: emberUp linear infinite; opacity: 0; }
+.loadLogo { animation: logoIn .9s cubic-bezier(.2, 1.5, .4, 1) both, logoFloat 2.6s ease-in-out .9s infinite; }
+.loadLogo img { animation: logoShine 1.6s ease-in-out .9s infinite; }
+.loadBar { width: min(420px, 72vw); height: 14px; border-radius: 99px; background: rgba(5, 12, 50, .55); border: 2px solid rgba(255, 255, 255, .35); overflow: hidden; animation: fadeUp .5s ease .5s both; }
+.loadBar i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, #ff7a00, #ffd23f, #fff3a6); box-shadow: 0 0 12px rgba(255, 190, 40, .9); }
+#loadTxt { animation: fadeUp .5s ease .6s both; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+@keyframes raySpin { to { transform: rotate(360deg); } }
+@keyframes glowPulse { 50% { transform: scale(1.12); opacity: .75; } }
+@keyframes emberUp { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), -105vh); opacity: 0; } }
+@keyframes logoIn { 0% { transform: scale(.2) rotate(-8deg); opacity: 0; } 70% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes logoFloat { 50% { transform: translateY(-10px) scale(1.02); } }
+@keyframes logoShine { 50% { filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .35)) drop-shadow(0 0 22px rgba(255, 180, 40, .85)) brightness(1.12); } }
+@keyframes fadeUp { from { transform: translateY(14px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #loading *, #loading *::before { animation: none !important; } }
 @media (max-width: 720px) {
   .logo { font-size: 36px; }
   #mini { width: 120px; height: 120px; }
@@ -324,7 +344,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   </div>
 </section>
 
-<div id="loading"><div class="loadLogo"><img src="logo/firefriends.webp" alt="FireFriends" width="900" height="485"></div><span id="loadTxt">CARREGANDO…</span></div>
+<div id="loading"><div class="rays"></div><div class="glow"></div><div class="embers" id="embers"></div><div class="loadLogo"><img src="logo/firefriends.webp" alt="FireFriends" width="900" height="485"></div><div class="loadBar"><i id="loadFill"></i></div><span id="loadTxt">CARREGANDO…</span></div>
 
 <script type="importmap">
 { "imports": {
@@ -2020,8 +2040,14 @@ async function loadB64(loader, url) {
 }
 async function boot() {
   const loader = new GLTFLoader();
+  // abertura com a logo: fica no mínimo 3 s, mesmo se tudo carregar antes
+  const INTRO = 3000, t0 = performance.now();
+  $('embers').innerHTML = Array.from({ length: 36 }, () => `<i style="left:${rand(0, 100)}%;--dx:${rand(-60, 60)}px;animation-duration:${rand(2.2, 4.2)}s;animation-delay:${rand(0, 3)}s;width:${rand(3, 8).toFixed(1)}px;height:${rand(3, 8).toFixed(1)}px"></i>`).join('');
   let done = 0; const total = GUNS.length + Object.keys(MODELS).length + 1;
-  const tick = () => { $('loadTxt').textContent = `CARREGANDO ${Math.round(++done / total * 100)}%`; };
+  const bar = () => { const p = Math.min(done / total, (performance.now() - t0) / INTRO); $('loadFill').style.width = (p * 100).toFixed(1) + '%'; $('loadTxt').textContent = `CARREGANDO ${Math.round(p * 100)}%`; return p; };
+  const barLoop = () => { if (bar() < 1) requestAnimationFrame(barLoop); };
+  barLoop();
+  const tick = () => { ++done; };
   await Promise.all([
     loadB64(loader, 'models/natureza.glb.txt').then(buildNature).catch(e => console.warn('Natureza não carregou:', e)).finally(tick),
     ...GUNS.map(g => loadB64(loader, 'models/armas/' + g.file + '.txt').then(m => prepGun(g, m)).catch(e => console.warn('Arma não carregou:', g.file, e)).finally(tick)),
@@ -2029,9 +2055,11 @@ async function boot() {
   ]);
   drawMapBase(); setTab('play'); checkServer();
   stormMesh.visible = false;
+  await new Promise(r => setTimeout(r, Math.max(0, INTRO - (performance.now() - t0))));
+  bar(); $('loadTxt').textContent = 'PRONTO!';
   state.mode = 'lobby';
-  $('loading').hidden = true;
   requestAnimationFrame(frame);
+  setTimeout(() => { $('loading').classList.add('out'); setTimeout(() => { $('loading').hidden = true; $('embers').innerHTML = ''; }, 650); }, 250);
 }
 boot();
 
