@@ -304,7 +304,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
         <dt>F</dt><dd>entra e sai do quadriciclo ou do carrinho de golfe</dd>
         <dt>Esc</dt><dd>pausa</dd>
       </dl>
-      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Vila: “Village / Town Assets” por imwolfgang no Sketchfab (CC-BY 4.0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. animações do Mixamo. Veículos: “Suzuki quadzilla 500” por Res1n e “Golf Cart” por dj110892 (Sketchfab, CC-BY 4.0).</p>
+      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Vila: “Village / Town Assets” por imwolfgang no Sketchfab (CC-BY 4.0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2; Recruta: “Stylized Soldier Rigged” por speedinfected. animações do Mixamo. Veículos: “Suzuki quadzilla 500” por Res1n e “Golf Cart” por dj110892 (Sketchfab, CC-BY 4.0).</p>
     </aside>
   </div>
 </section>
@@ -380,7 +380,7 @@ import * as Conta from './conta.js';
 
 // Modelos do Tripo3D: coloque o .glb ao lado da página e registre pelo id do elenco.
 // Exemplo: ruan: 'models/ruan.glb'. Sem arquivo, o jogo usa o boneco provisório.
-const MODELS = Object.fromEntries(['spice', 'midas', 'renegade', 'masterchief', 'snakeeyes', 'drift', 'jules'].map(k => [k, `models/personagens/${k}.glb.txt`]));
+const MODELS = Object.fromEntries(['spice', 'midas', 'renegade', 'masterchief', 'snakeeyes', 'drift', 'jules', 'recruta'].map(k => [k, `models/personagens/${k}.glb.txt`]));
 // ônibus de batalha e paraquedas (Sketchfab, CC-BY 4.0)
 const PROPS = { onibus: 'models/veiculos/onibus.glb.txt', paraquedas: 'models/veiculos/paraquedas.glb.txt' }, props = {};
 
@@ -851,7 +851,7 @@ function setRigGun(rig, key) {
 }
 // modelos dos personagens (Tripo3D)
 const gltfs = {};
-function dressRig(rig, gltf) {
+function dressRig(rig, gltf, color) {
   if (rig.glb) { rig.root.remove(rig.glb.wrap); rig.glb = null; }
   rig.parts.forEach(p => p.visible = !gltf);
   if (!gltf) return;
@@ -860,10 +860,18 @@ function dressRig(rig, gltf) {
   const box = new THREE.Box3(); model.updateMatrixWorld(true);
   model.traverse(o => { if (o.isBone) box.expandByPoint(o.getWorldPosition(new V3())); });
   if (box.isEmpty()) box.setFromObject(model);
+  else { // cabeção (Recruta) passa bem do último osso: usa a caixa da malha quando ela é coerente com os ossos
+    const mesh = new THREE.Box3().setFromObject(model, true), k = mesh.getSize(new V3()).y / box.getSize(new V3()).y;
+    if (k >= 1 && k <= 2.2) box.copy(mesh);
+  }
   const size = box.getSize(new V3()), s = 1.8 / Math.max(.01, size.y);
   const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
   model.position.set(-cx * s, -box.min.y * s, -cz * s); model.scale.setScalar(s);
-  model.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  model.traverse(o => {
+    if (!o.isMesh) return; o.castShadow = o.receiveShadow = true;
+    // Recruta: farda, capacete e mochila pegam a cor do jogador
+    if (color && /corpo|capacete|mochila/i.test(o.material.name)) { o.material = o.material.clone(); o.material.color.multiply(new THREE.Color(color).lerp(new THREE.Color('#fff'), .45)); }
+  });
   const wrap = new THREE.Group(); wrap.rotation.y = Math.PI; wrap.add(model); rig.root.add(wrap);
   const G = rig.glb = { wrap, model, mixer: new THREE.AnimationMixer(model), actions: {}, cur: null };
   for (const clip of gltf.animations) {
@@ -922,7 +930,7 @@ const R = .38, STEP = .6, HEIGHT = 1.8, GRAV = 24;
 function makeActor(ch, kind, id) {
   const isPlayer = kind === 'me';
   const rig = makeRig(ch); scene.add(rig.root);
-  if (gltfs[ch.id]) dressRig(rig, gltfs[ch.id]);
+  if (gltfs[ch.id]) dressRig(rig, gltfs[ch.id], ch.color);
   Conta.applySkin(rig.root, ch.skin, ch.color);
   return {
     id, kind, isBot: !!ch.isBot, tp: new V3(), tyaw: 0, tpitch: 0,
@@ -1803,7 +1811,7 @@ function placeOnPad(pad, ch) {
   if (pad.rig) { pad.g.remove(pad.rig.root); pad.rig = null; }
   pad.key = key; pad.plus.visible = !ch;
   if (!ch) return;
-  const r = makeRig(ch); if (gltfs[ch.id]) dressRig(r, gltfs[ch.id]);
+  const r = makeRig(ch); if (gltfs[ch.id]) dressRig(r, gltfs[ch.id], ch.color);
   Conta.applySkin(r.root, ch.skin, ch.color);
   r.tag.visible = false; setRigGun(r, 'ar'); r.root.position.y = .22; r.idleT = rand(0, 6);
   r.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
