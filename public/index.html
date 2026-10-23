@@ -144,6 +144,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .stat { background: var(--panel); border-radius: 6px; padding: 4px 10px; display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; }
 .stat small { font-size: 11px; letter-spacing: 1.2px; color: var(--ink-dim); text-transform: uppercase; }
 .stat span { font-family: var(--font-d); font-size: 20px; }
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.modes button { background: rgba(0, 0, 0, .3); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 600 13px var(--font-b); padding: 6px 4px; cursor: pointer; line-height: 1.15; }
+.modes button.on { background: #ffd23f; color: #1a1430; border-color: #ffd23f; }
+.modes button:disabled:not(.on) { opacity: .45; cursor: default; }
+#board { background: var(--panel); border-radius: 6px; padding: 6px 10px; font-size: 13px; min-width: 170px; font-variant-numeric: tabular-nums; }
+#board:empty { display: none; }
+#board div { display: flex; justify-content: space-between; gap: 12px; }
+#board .me { color: #ffd23f; font-weight: 700; }
+#endBoard { text-align: left; margin: 6px auto 14px; padding: 0 0 0 26px; max-width: 280px; font-variant-numeric: tabular-nums; }
+#endBoard:empty { display: none; }
+#endBoard li { display: list-item; } #endBoard li span { float: right; } #endBoard li.me { color: #ffd23f; font-weight: 700; }
 #stormInfo { background: var(--panel); border-radius: 6px; padding: 4px 10px; font-size: 14px; color: var(--storm); font-variant-numeric: tabular-nums; }
 .bc { position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(360px, 60vw); display: flex; flex-direction: column; gap: 5px; }
 .bar { position: relative; height: 18px; background: rgba(0, 0, 0, .45); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
@@ -242,8 +253,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
     <div class="launch">
       <div class="mode panel">
         <small>Modo</small>
-        <b>Battle Royale</b>
+        <b id="modeName">Battle Royale</b>
         <span id="modeSub">Vila Colorida</span>
+        <div class="modes" id="modeList"></div>
         <div class="opts">
           <label for="diff">Bots
             <select id="diff"><option value="0">Fácil</option><option value="1" selected>Normal</option><option value="2">Difícil</option></select>
@@ -311,6 +323,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
       <div class="stat"><small>Abates</small><span id="kills">0</span></div>
     </div>
     <div id="stormInfo"></div>
+    <div id="board"></div>
   </div>
   <div id="centerMsg"></div>
   <div id="reloadMsg"></div>
@@ -341,6 +354,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
     <h2 id="endTitle">Vitória</h2>
     <div class="big" id="endPlace">#1</div>
     <p id="endText"></p>
+    <ol id="endBoard"></ol>
     <div class="row">
       <button class="play" id="againBtn" type="button">Jogar de novo</button>
       <button class="ghost" id="lobbyBtn" type="button">Lobby</button>
@@ -1067,6 +1081,8 @@ function applyHit(a, w, hit, d) {
 }
 function damage(t, dmg, src, w, head, point) {
   if (!t.alive) return;
+  if (MODE.teams && src && src !== t && src.team === t.team) return; // sem fogo amigo
+  if (MODE.respawn && state.time - (t.spawnT ?? -9) < 2) return; // 2 s de proteção ao nascer
   dmg = Math.max(1, Math.round(dmg));
   if (t.kind === 'remote') {
     // o dono do alvo aplica o dano; aqui só mostra o acerto
@@ -1082,14 +1098,17 @@ function damage(t, dmg, src, w, head, point) {
 }
 function kill(t, src, w, fromNet = false) {
   X.onKill(t);
-  t.alive = false; t.hp = 0; t.deathT = 0; t.place = aliveCount() + 1;
+  t.alive = false; t.hp = 0; t.deathT = 0; t.place = aliveCount() + 1; t.deaths = (t.deaths || 0) + 1;
   if (!fromNet) net.send({ t: 'dead', id: t.id, by: src ? src.id : null, g: w ? w.key : null });
   if (src && src !== t) src.kills++;
   if (src) feed(`<b class="${src === player ? 'you' : ''}">${esc(src.name)}</b> eliminou <b class="${t === player ? 'you' : ''}">${esc(t.name)}</b> · ${w ? w.name : ''}`);
   else feed(`<b class="${t === player ? 'you' : ''}">${esc(t.name)}</b> foi pego pela tempestade`);
   if (src === player) { Sfx.elim(); showMsg('Eliminou ' + t.name, `${player.kills} ${player.kills === 1 ? 'abate' : 'abates'}`, 1.8); }
   if (!fromNet) dropLoot(t);
-  if (t === player) X.playerDied(src, w, () => endGame(false, src));
+  if (MODE.respawn) { // volta em 3 s; quem controla o boneco (dono ou host dos bots) decide onde
+    if (local(t)) setTimeout(() => respawn(t), 3000);
+    if (t === player) showMsg('Eliminado', src && src !== t ? `por ${src.name} · volta em 3 s` : 'volta em 3 s', 2.6);
+  } else if (t === player) X.playerDied(src, w, () => endGame(false, src));
   else if (player && player.alive && aliveCount() === 1) setTimeout(() => endGame(true), 1200);
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1183,7 +1202,7 @@ function addLoot(kind, x, z, gunKey, mag, id) {
 function removeLoot(l) { const i = loot.indexOf(l); if (i >= 0) loot.splice(i, 1); scene.remove(l.mesh); }
 function dropLoot(a) {
   const s = a.inv.filter(Boolean)[0]; const p = a.pos;
-  if (s) lootAdd('gun', p.x + rand(-1, 1), p.z + rand(-1, 1), s.w.key, s.w.mag);
+  if (s && !MODE.gunGame) lootAdd('gun', p.x + rand(-1, 1), p.z + rand(-1, 1), s.w.key, s.w.mag);
   if (Math.random() < .6) lootAdd(Math.random() < .5 ? 'shield' : 'med', p.x + rand(-1, 1), p.z + rand(-1, 1));
   X.dropLoot(a);
   if (a.mats > 0) lootAdd('wood', p.x + rand(-1, 1), p.z + rand(-1, 1));
@@ -1192,12 +1211,12 @@ function spawnLoot() {
   while (loot.length) removeLoot(loot[0]);
   let n = 0; const L = (kind, x, z, k) => addLoot(kind, x, z, k, undefined, 'L' + (n++));
   const spot = (R = HALF - 10) => { for (let i = 0; i < 40; i++) { const a = mr(0, TAU), r = Math.sqrt(mrng()) * R, x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, .8)) return [x, z]; } return [mr(-10, 10), mr(-10, 10)]; };
-  for (let i = 0; i < 34; i++) { const [x, z] = spot(); L('gun', x, z, GUNS[i % GUNS.length].key); }
+  if (!MODE.gunGame) for (let i = 0; i < 34; i++) { const [x, z] = spot(); L('gun', x, z, GUNS[i % GUNS.length].key); }
   for (let i = 0; i < 26; i++) { const [x, z] = spot(); L(i % 2 ? 'med' : 'shield', x, z); }
   for (let i = 0; i < 18; i++) { const [x, z] = spot(); L('wood', x, z); }
   X.spawnLoot(L, spot);
   // no meio da vila sempre tem alguma coisa
-  for (const k of ['m5', 'stm', 'dd4', 'g95', 'c7', 'scar', 'tac']) { const [x, z] = spot(VILLA_R * .8); L('gun', x, z, k); }
+  if (!MODE.gunGame) for (const k of ['m5', 'stm', 'dd4', 'g95', 'c7', 'scar', 'tac']) { const [x, z] = spot(VILLA_R * .8); L('gun', x, z, k); }
   for (let i = 0; i < 4; i++) { const [x, z] = spot(VILLA_R * .8); L(i % 2 ? 'med' : 'shield', x, z); }
 }
 function giveGun(a, key, mag) {
@@ -1299,7 +1318,7 @@ function resetStorm() { storm.c.set(0, 0, 0); storm.r = 175; storm.phase = 0; st
 function updateStorm(dt) {
   if (storm.on === false) { stormMesh.visible = false; return; }
   const P = PHASES[Math.min(storm.phase, PHASES.length - 1)];
-  storm.t += dt;
+  storm.t += dt * (storm.k || 1);
   if (storm.stage === 'wait' && storm.t >= P.wait) { storm.stage = 'shrink'; storm.t = 0; showMsg('A tempestade está fechando!', 'Corra para o círculo branco no mapa', 2.5); Sfx.storm(); }
   else if (storm.stage === 'shrink') {
     const k = clamp(storm.t / P.shrink, 0, 1);
@@ -1435,7 +1454,7 @@ function botUpdate(a, dt) {
     b.think = rand(.2, .35);
     let best = null, bd = a.gliding ? 0 : 70;
     for (const o of actors) {
-      if (o === a || !o.alive || o.gliding) continue;
+      if (o === a || !o.alive || o.gliding || (MODE.teams && o.team === a.team)) continue;
       const d = o.pos.distanceTo(a.pos); if (d < bd && canSee(a, o)) { bd = d; best = o; }
     }
     if (best !== b.target) { b.target = best; b.react = D.react * rand(.8, 1.5); }
@@ -1457,7 +1476,8 @@ function botUpdate(a, dt) {
           if (outside(l.pos, storm.toC, storm.toR)) continue;
           const d = l.pos.distanceTo(a.pos); if (d < ld) { ld = d; tgt = l.pos; }
         }
-        if (tgt) b.goal.copy(tgt);
+        if (MODE.king && !(needHeal && tgt) && Math.random() < .75) b.goal.set(KING.x + rand(-5, 5), 0, KING.z + rand(-5, 5));
+        else if (tgt) b.goal.copy(tgt);
         else { const ang = rand(0, TAU), rr = Math.sqrt(Math.random()) * Math.max(4, storm.toR * .8); b.goal.set(clamp(storm.toC.x + Math.cos(ang) * rr, -HALF + 5, HALF - 5), 0, clamp(storm.toC.z + Math.sin(ang) * rr, -HALF + 5, HALF - 5)); }
       }
     }
@@ -1625,6 +1645,7 @@ function drawMini() {
   mctx.fillStyle = 'rgba(150,60,230,.45)'; mctx.fill('evenodd'); mctx.restore();
   mctx.strokeStyle = '#fff'; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(toMap(storm.toC.x), toMap(storm.toC.z), Math.max(1, storm.toR / MAPS * 360), 0, TAU); mctx.stroke();
   }
+  if (MODE.king) { mctx.strokeStyle = '#ffd23f'; mctx.lineWidth = 3; mctx.beginPath(); mctx.arc(toMap(KING.x), toMap(KING.z), KING_R / MAPS * 360 + 2, 0, TAU); mctx.stroke(); }
   if (player) {
     mctx.save(); mctx.translate(toMap(player.pos.x), toMap(player.pos.z)); mctx.rotate(-player.yaw);
     mctx.fillStyle = '#ffd23f'; mctx.strokeStyle = '#000'; mctx.lineWidth = 2;
@@ -1645,6 +1666,7 @@ function hud(dt) {
   $('prompt').innerHTML = nearGun && a.alive ? `<b>E</b> pegar ${esc(GUN[nearGun.gun].name)}` : '';
   const P = PHASES[Math.min(storm.phase, PHASES.length - 1)];
   setT('stormInfo', storm.on === false ? '' : player.inBus ? 'ESPAÇO para saltar do ônibus' : storm.stage === 'wait' ? `Tempestade fecha em ${fmt(Math.max(0, P.wait - storm.t))}` : storm.toR === 0 && storm.r < 6 ? 'Círculo final' : 'Tempestade fechando!');
+  modeHud();
   setT('viewMode', view === 1 ? '1ª pessoa' : '3ª pessoa');
   const w = sl?.w, scoped = input.ads && w?.scope && a.alive;
   setS($('scope'), 'opacity', scoped && camera.fov < w.fov + 8 ? '1' : '0');
@@ -1962,11 +1984,13 @@ function onNet(m) {
         if (!wasHost && isHost()) for (const a of actors) if (a.isBot && a.kind === 'remote') { a.kind = 'bot'; a.pos.copy(a.tp); }
         if (player && player.alive && aliveCount() === 1 && state.mode === 'play') setTimeout(() => endGame(true), 1200);
       }
+      if (isHost() && !inMatch) net.send({ t: 'mode', mode: settings.mode });
       refreshPads(); updateOnlineUI(); break;
     }
     case 'full': updateOnlineUI('Essa sala está cheia (16 jogadores).'); break;
     case 'start': startMatch(m); break;
     case 'xp': if ($('endXp')) $('endXp').textContent = Conta.onlineResult(m); break;
+    case 'mode': if (MODES[m.mode] && !inMatch) { settings.mode = m.mode; renderModes(); } break;
   }
   if (!inMatch) return;
   switch (m.t) {
@@ -1975,6 +1999,9 @@ function onNet(m) {
     case 'f': { const a = byId(m.id); if (a && a.kind === 'remote' && a.alive) remoteFire(a, m); break; }
     case 'hit': { const t = byId(m.to); if (t && t.kind !== 'remote') damage(t, m.d, byId(m.by), m.g ? GUN[m.g] : null, !!m.h, null); break; }
     case 'dead': { const t = byId(m.id); if (t && t.alive) kill(t, byId(m.by), m.g ? GUN[m.g] : null, true); break; }
+    case 'resp': { const a = byId(m.id); if (a && a.kind === 'remote') respawn(a, m.x, m.z); break; }
+    case 'kp': for (const [id, v] of m.p) { const a = byId(id); if (a) a.kp = v; } break;
+    case 'end': for (const [id, k, v] of m.k || []) { const a = byId(id); if (a) { a.kills = k; a.kp = v; } } showResults(m.r, m.w); break;
     case 'take': { const l = loot.find(x => x.id === m.id); if (l) removeLoot(l); break; }
     case 'ladd': if (!loot.some(x => x.id === m.id)) addLoot(m.kind, m.x, m.z, m.gun, m.mag, m.id); break;
     case 'wall': if (!solids.some(s => s.id === m.id)) makeWall(m.id, m.x, m.z, !!m.ax, m.b); break;
@@ -2012,7 +2039,7 @@ function updateOnlineUI(msg) {
   const pb = $('playBtn');
   pb.disabled = on && !isHost();
   pb.textContent = !on ? 'Jogar' : isHost() ? 'Iniciar partida' : 'Aguardando o líder';
-  $('modeSub').textContent = on ? 'Online · bots completam a partida' : 'Vila Colorida';
+  renderModes();
 }
 $('createRoom').addEventListener('click', () => {
   if (net.on || net.ws) { leaveRoom(); return; }
@@ -2031,6 +2058,115 @@ function checkServer() {
   });
 }
 
+// ---------- Modos de jogo ----------
+const MODES = {
+  br: { name: 'Battle Royale', short: 'Battle Royale', desc: 'Até sobrar 1 · tempestade', storm: true, bus: true },
+  dm: { name: 'Mata-mata', short: 'Mata-mata', desc: '5 min · quem matar mais vence', respawn: true, time: 300 },
+  sd: { name: 'Morte Súbita', short: 'Morte Súbita', desc: '1 vida · todos de SCAR · tempestade rápida', storm: true, fast: 2.5, gun: 'scar' },
+  team: { name: 'Times', short: 'Times', desc: 'Vermelho × Azul · 5 min · mais abates', respawn: true, time: 300, teams: true },
+  gun: { name: 'Corrida das Armas', short: 'Corrida das Armas', desc: 'Cada abate troca a arma · vence quem passar por todas', respawn: true, time: 480, gunGame: true },
+  king: { name: 'Rei da Vila', short: 'Rei da Vila', desc: 'Fique sozinho na zona da praça · 60 pontos', respawn: true, time: 300, king: true, goal: 60 },
+};
+let MODE = MODES.br;
+settings.mode = MODES[store.get('mode', 'br')] ? store.get('mode', 'br') : 'br';
+const LADDER = ['m5', 'ar', 'scar', 'stm', 'dd4', 'g95', 'tac', 'c7', 'bolt'];
+const TEAMS = [{ name: 'Vermelho', color: '#ff4f4f' }, { name: 'Azul', color: '#3fa0ff' }];
+const KING = new V3(-32, 0, 12), KING_R = 8;
+const kingRing = new THREE.Mesh(new THREE.RingGeometry(KING_R - .5, KING_R, 64), new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
+kingRing.rotation.x = -Math.PI / 2; kingRing.position.set(KING.x, .12, KING.z); kingRing.visible = false; scene.add(kingRing);
+const kingBeam = new THREE.Mesh(new THREE.CylinderGeometry(KING_R, KING_R, 14, 48, 1, true), new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: .1, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+kingBeam.position.set(KING.x, 7, KING.z); kingBeam.visible = false; scene.add(kingBeam);
+const modeState = { sent: 0, over: false };
+function renderModes() {
+  const host = isHost();
+  $('modeList').innerHTML = Object.entries(MODES).map(([k, m]) => `<button type="button" data-mode="${k}" class="${k === settings.mode ? 'on' : ''}"${host ? '' : ' disabled'}>${m.short}</button>`).join('');
+  $('modeName').textContent = MODES[settings.mode].name;
+  $('modeSub').textContent = MODES[settings.mode].desc + (net.on ? (host ? ' · online' : ' · o líder escolhe') : '');
+}
+$('modeList').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b || !isHost()) return;
+  settings.mode = b.dataset.mode; store.set('mode', settings.mode); renderModes();
+  net.send({ t: 'mode', mode: settings.mode });
+});
+const local = a => a.kind !== 'remote';
+// lugar para nascer no chão: dentro e em volta da vila, longe dos inimigos
+function spawnSpot(a, rnd = Math.random) {
+  let best = null, bd = -1;
+  for (let i = 0; i < 24; i++) {
+    const ang = rnd() * TAU, r = 10 + Math.sqrt(rnd()) * (VILLA_R + 12), x = Math.cos(ang) * r, z = Math.sin(ang) * r;
+    if (!free(x, z, 1)) continue;
+    let d = 1e9; for (const o of actors) if (o !== a && o.alive && !(MODE.teams && o.team === a.team)) d = Math.min(d, Math.hypot(o.pos.x - x, o.pos.z - z));
+    if (d > bd) { bd = d; best = [x, z]; } if (d > 30) break;
+  }
+  return best || [0, 0];
+}
+function startGun(a) { return MODE.gunGame ? LADDER[Math.min(a.kills, LADDER.length - 1)] : MODE.gun || (a.isBot ? GUNS[Math.floor(Math.random() * GUNS.length)].key : 'ar'); }
+function placeOnGround(a, x, z) {
+  a.pos.set(x, groundAt(x, z, 100), z); a.tp.copy(a.pos); a.vel.set(0, 0, 0); a.gliding = false; a.onGround = true; a.spawnT = state.time;
+  a.yaw = a.tyaw = Math.atan2(x - KING.x * (MODE.king ? 1 : 0), z - KING.z * (MODE.king ? 1 : 0));
+  if (a.bot) { a.bot.goal.set(x * .4, 0, z * .4); a.bot.goalT = 4; a.bot.target = a.bot.chase = null; }
+}
+function respawn(a, x, z) {
+  if (!actors.includes(a) || (state.mode !== 'play' && state.mode !== 'paused')) return;
+  if (x == null) [x, z] = spawnSpot(a);
+  a.alive = true; a.hp = 100; a.sh = 0; a.deathT = 0; a.inv = [null, null, null]; a.wi = 0; a.reload = 0; a.burstLeft = 0; a.mats = Math.max(a.mats, 60);
+  placeOnGround(a, x, z);
+  const r = a.rig; r.root.rotation.x = 0; if (!r.root.parent) scene.add(r.root);
+  if (r.glb) { r.glb.cur?.stop(); r.glb.cur = null; }
+  if (local(a)) { giveGun(a, startGun(a)); net.send({ t: 'resp', id: a.id, x, z }); }
+  if (a === player) { buildSlots(); showMsg('De volta!', '', 1.2); }
+}
+// pontos de cada um (abates, ou tempo na zona no Rei da Vila)
+const score = a => MODE.king ? Math.floor(a.kp || 0) : a.kills;
+function teamScore(t) { return actors.reduce((n, a) => n + (a.team === t ? score(a) : 0), 0); }
+function ranking() { return [...actors].sort((p, q) => score(q) - score(p) || (p.deaths || 0) - (q.deaths || 0)); }
+function modeStep(dt) {
+  if (!MODE.respawn) return;
+  // Corrida das armas: a arma acompanha o número de abates
+  if (MODE.gunGame) for (const a of actors) if (a.alive && local(a)) {
+    const k = LADDER[Math.min(a.kills, LADDER.length - 1)];
+    if (slot(a)?.w.key !== k) { a.inv = [null, null, null]; a.wi = 0; giveGun(a, k); if (a === player) { buildSlots(); showMsg(GUN[k].name, `Arma ${Math.min(a.kills, LADDER.length - 1) + 1} de ${LADDER.length}`, 1.4); } }
+  }
+  kingRing.material.opacity = .55 + Math.sin(state.time * 4) * .25;
+  if (!isHost() || modeState.over) return;
+  if (MODE.king) {
+    const inside = actors.filter(a => a.alive && Math.hypot(a.pos.x - KING.x, a.pos.z - KING.z) < KING_R);
+    const sides = new Set(inside.map(a => MODE.teams ? a.team : a.id));
+    if (sides.size === 1) for (const a of inside) a.kp = (a.kp || 0) + dt;
+    modeState.sent += dt;
+    if (net.on && modeState.sent > .5) { modeState.sent = 0; net.send({ t: 'kp', p: actors.map(a => [a.id, Math.floor(a.kp || 0)]) }); }
+  }
+  const top = ranking()[0];
+  const done = state.time >= MODE.time || (MODE.gunGame && top && top.kills >= LADDER.length) || (MODE.king && top && score(top) >= MODE.goal);
+  if (done) {
+    const r = ranking().map(a => a.id), w = MODE.teams ? (teamScore(0) >= teamScore(1) ? 0 : 1) : null;
+    net.send({ t: 'end', r, w, k: actors.map(a => [a.id, a.kills, Math.floor(a.kp || 0)]) }); showResults(r, w);
+  }
+}
+function showResults(ids, w) {
+  if (modeState.over) return; modeState.over = true;
+  state.mode = 'over'; Sfx.glide(false);
+  if (document.pointerLockElement) document.exitPointerLock();
+  const list = ids.map(byId).filter(Boolean), pos = list.indexOf(player) + 1;
+  const win = MODE.teams ? player.team === w : pos === 1;
+  $('endTitle').textContent = win ? 'Vitória!' : 'Fim de jogo'; $('endTitle').className = win ? 'win' : '';
+  $('endPlace').textContent = MODE.teams ? `${teamScore(0)} × ${teamScore(1)}` : '#' + pos;
+  $('endText').textContent = MODE.teams ? `Time ${TEAMS[w].name} venceu` : `${list[0]?.name ?? ''} venceu · ${MODE.name}`;
+  $('endBoard').innerHTML = list.slice(0, 8).map(a => `<li class="${a === player ? 'me' : ''}">${esc(a.name)}<span>${score(a)}${MODE.king ? ' pts' : score(a) === 1 ? ' abate' : ' abates'}</span></li>`).join('');
+  $('againBtn').hidden = net.on && !isHost();
+  $('end').hidden = false;
+}
+let boardHtml = '';
+function modeHud() {
+  if (MODE.storm) return;
+  const left = Math.max(0, MODE.time - state.time);
+  const pre = MODE.teams ? `${TEAMS[0].name} ${teamScore(0)} × ${teamScore(1)} ${TEAMS[1].name} · ` : '';
+  setT('stormInfo', pre + 'Tempo ' + fmt(left));
+  const rows = ranking().slice(0, 5); if (!rows.includes(player)) rows.push(player);
+  const html = rows.map(a => `<div class="${a === player ? 'me' : ''}"><span>${MODE.teams ? `<b style="color:${TEAMS[a.team].color}">●</b> ` : ''}${esc(a.name)}</span><span>${MODE.gunGame ? Math.min(a.kills + 1, LADDER.length) + '/' + LADDER.length : score(a)}</span></div>`).join('');
+  if (html !== boardHtml) { boardHtml = html; $('board').innerHTML = html; }
+}
+
 // ---------- Partida ----------
 function clearMatch() {
   startBus(false);
@@ -2047,21 +2183,24 @@ function startGame() {
   const used = new Set(humans.map(h => h.charId));
   const bots = [...roster.filter(r => !used.has(r.id)).map(r => ({ charId: r.id, name: r.name, color: r.color })),
     ...EXTRA.slice(0, extra).map(([name, color], i) => ({ charId: 'extra' + i, name, color }))];
-  const m = { t: 'start', seed: (Math.random() * 2 ** 31) | 0, diff, extra, players: humans, bots };
+  const m = { t: 'start', seed: (Math.random() * 2 ** 31) | 0, diff, extra, players: humans, bots, mode: settings.mode };
   net.send(m); startMatch(m);
 }
 function startMatch(m) {
   Sfx.init();
-  clearMatch();
+  clearMatch(); state.time = 0;
   settings.diff = m.diff; settings.extra = m.extra;
+  settings.mode = MODES[m.mode] ? m.mode : 'br'; MODE = MODES[settings.mode]; modeState.over = false; modeState.sent = 0; boardHtml = ''; $('board').innerHTML = ''; $('endBoard').innerHTML = '';
   mrng = mulberry(m.seed); seq = 0;
   const meId = net.on ? net.id : 'me', hostRunsBots = isHost();
+  state.useBus = !!MODE.bus; storm.on = !!MODE.storm; // o modo liga ou desliga ônibus e tempestade
   const drop = state.useBus !== false; startBus(drop);
   const chars = [...m.players.map(p => ({ id: p.charId, name: p.name, color: p.color, skin: p.skin, netId: p.id })),
     ...m.bots.map((b, i) => ({ id: b.charId, name: b.name, color: b.color, isBot: true, botId: 'b' + i }))];
   chars.forEach((ch, i) => {
     const kind = ch.isBot ? (hostRunsBots ? 'bot' : 'remote') : ch.netId === meId ? 'me' : 'remote';
-    const a = makeActor(ch, kind, ch.isBot ? ch.botId : ch.netId);
+    const team = i % 2; if (MODE.teams) ch.color = TEAMS[team].color;
+    const a = makeActor(ch, kind, ch.isBot ? ch.botId : ch.netId); a.team = MODE.teams ? team : i; a.deaths = 0; a.kp = 0;
     const ang = i / chars.length * TAU + mr(-.2, .2), r = mr(35, 90);
     a.pos.set(Math.cos(ang) * r, 75 + mr(0, 10), Math.sin(ang) * r); a.tp.copy(a.pos);
     a.yaw = a.tyaw = Math.atan2(a.pos.x, a.pos.z); a.gliding = true; a.chute = !drop;
@@ -2076,15 +2215,24 @@ function startMatch(m) {
       a.bot.goal.set(Math.cos(gang) * gr, 0, Math.sin(gang) * gr); a.bot.goalT = 20;
       giveGun(a, GUNS[Math.floor(mrng() * GUNS.length)].key); a.mats = 60; a.wi = 0;
     } else { giveGun(a, 'ar'); a.mats = 100; }
+    if (!MODE.bus) { // modos sem queda: todo mundo começa no chão, já armado
+      actors.push(a); const [x, z] = spawnSpot(a, mrng); placeOnGround(a, x, z);
+      a.inv = [null, null, null]; a.wi = 0; giveGun(a, MODE.gunGame ? LADDER[0] : MODE.gun || (a.isBot ? GUNS[Math.floor(mrng() * GUNS.length)].key : 'ar'));
+      if (MODE.gun) a.sh = 50;
+      return;
+    }
     actors.push(a);
   });
   player = actors.find(a => a.kind === 'me'); player.bloom = 0; player.camDist = 6;
   vmSleeve.color.set(player.ch.color);
   resetStorm(); spawnLoot(); X.start(); stormMesh.visible = storm.on !== false;
   if (drop) storm.t = -(bus.dur + 8); // a tempestade só começa a contar depois do voo do ônibus
+  storm.k = MODE.fast || 1;
+  if (!MODE.storm) { storm.r = 1e4; storm.toR = VILLA_R + 25; storm.c.set(0, 0, 0); storm.toC.set(0, 0, 0); }
+  kingRing.visible = kingBeam.visible = !!MODE.king;
   state.time = 0; state.mode = 'play';
   $('lobby').hidden = true; $('end').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
-  buildSlots(); if (drop) showMsg('Você está no ônibus de batalha!', 'ESPAÇO para saltar · o paraquedas abre sozinho perto do chão', 5); else showMsg('Plane até o chão', 'WASD para guiar · pouse perto de armas', 4);
+  buildSlots(); if (drop) showMsg('Você está no ônibus de batalha!', 'ESPAÇO para saltar · o paraquedas abre sozinho perto do chão', 5); else showMsg(MODE.name, MODE.desc, 3.5);
   requestLock();
 }
 function endGame(win, killer) {
@@ -2185,7 +2333,7 @@ function step(dt) {
       a.rig.tag.visible = a.seenByPlayer;
     }
     player.rig.tag.visible = false;
-    updateStorm(dt); updateLoot(dt); updateFx(dt); X.update(dt);
+    updateStorm(dt); modeStep(dt); updateLoot(dt); updateFx(dt); X.update(dt);
     for (const k in vm.guns) { const f = vm.guns[k].flash; if (f.visible) { f.userData.t -= dt; if (f.userData.t <= 0) f.visible = false; } }
     Sfx.glide(player.alive && player.gliding && !player.inBus);
     updateBus(dt);
@@ -2194,7 +2342,7 @@ function step(dt) {
     for (const a of actors) { if (a.kind === 'bot' && a.alive) botUpdate(a, dt); if (a.kind === 'remote') remoteUpdate(a, dt); animateRig(a, dt); }
     updateLoot(dt); X.update(dt);
     net.t += dt; if (net.on && net.t >= .05) { net.t = 0; sendSnaps(); }
-    updateStorm(dt); updateFx(dt); updateCamera(dt);
+    if (MODE.storm) updateStorm(dt); updateFx(dt); updateCamera(dt);
   } else if (state.mode === 'lobby') {
     lobbyStep(dt);
   }
