@@ -286,9 +286,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
         <dt>R</dt><dd>recarrega</dd>
         <dt>E</dt><dd>pega arma do chão</dd>
         <dt>Q</dt><dd>constrói parede de madeira</dd>
+        <dt>G</dt><dd>segure para mirar a granada, solte para jogar</dd>
+        <dt>H</dt><dd>usa curativo (bandagem até 75, kit enche a vida)</dd>
+        <dt>T</dt><dd>coloca armadilha no chão</dd>
+        <dt>F</dt><dd>entra e sai do quadriciclo ou do carrinho de golfe</dd>
         <dt>Esc</dt><dd>pausa</dd>
       </dl>
-      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Vila: “Village / Town Assets” por imwolfgang no Sketchfab (CC-BY 4.0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. Animações do Mixamo.</p>
+      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Vila: “Village / Town Assets” por imwolfgang no Sketchfab (CC-BY 4.0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. animações do Mixamo. Veículos: “Suzuki quadzilla 500” por Res1n e “Golf Cart” por dj110892 (Sketchfab, CC-BY 4.0).</p>
     </aside>
   </div>
 </section>
@@ -356,6 +360,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import * as X from './extras.js'; // granadas, curativos, armadilhas, veículos e killcam
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as Conta from './conta.js';
 
@@ -1004,7 +1009,7 @@ function playerSpread() {
   s *= 1 + clamp(sp / 6, 0, 1) * .8; if (!a.onGround) s *= 2; return s + a.bloom;
 }
 function fire(a, dir, fromBurst = false) {
-  const sl = slot(a); if (!sl || !a.alive || a.gliding) return false;
+  const sl = slot(a); if (!sl || !a.alive || a.gliding || X.busy(a)) return false;
   const w = sl.w;
   if (!fromBurst && (a.cool > 0 || a.reload > 0)) return false;
   if (sl.mag <= 0) { startReload(a); return false; }
@@ -1076,6 +1081,7 @@ function damage(t, dmg, src, w, head, point) {
   if (t.hp <= 0) kill(t, src, w);
 }
 function kill(t, src, w, fromNet = false) {
+  X.onKill(t);
   t.alive = false; t.hp = 0; t.deathT = 0; t.place = aliveCount() + 1;
   if (!fromNet) net.send({ t: 'dead', id: t.id, by: src ? src.id : null, g: w ? w.key : null });
   if (src && src !== t) src.kills++;
@@ -1083,7 +1089,7 @@ function kill(t, src, w, fromNet = false) {
   else feed(`<b class="${t === player ? 'you' : ''}">${esc(t.name)}</b> foi pego pela tempestade`);
   if (src === player) { Sfx.elim(); showMsg('Eliminou ' + t.name, `${player.kills} ${player.kills === 1 ? 'abate' : 'abates'}`, 1.8); }
   if (!fromNet) dropLoot(t);
-  if (t === player) setTimeout(() => endGame(false, src), 2200);
+  if (t === player) X.playerDied(src, w, () => endGame(false, src));
   else if (player && player.alive && aliveCount() === 1) setTimeout(() => endGame(true), 1200);
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1099,6 +1105,7 @@ for (let i = 0; i < 40; i++) {
 let tracerI = 0;
 function tracer(a, b) {
   const m = tracers[tracerI++ % tracers.length], L = a.distanceTo(b); if (L < 1) return;
+  X.onTracer(a, b);
   m.position.copy(a); m.lookAt(b); m.scale.set(1, 1, L); m.visible = true; m.userData.t = .07; m.material.opacity = .9;
 }
 const sparks = [];
@@ -1149,7 +1156,8 @@ const loot = []; // {kind:'gun'|'med'|'shield'|'wood', gun, mag, mesh, pos}
 const lootRing = new THREE.RingGeometry(.45, .6, 24); lootRing.rotateX(-Math.PI / 2);
 function lootMesh(kind, gunKey) {
   const g = new THREE.Group();
-  if (kind === 'gun') { const gg = makeGun(gunKey); gg.g.rotation.y = Math.PI / 2; gg.g.position.y = .55; g.add(gg.g); g.userData.spin = gg.g; }
+  if (X.LOOT[kind]) X.LOOT[kind].mesh(g);
+  else if (kind === 'gun') { const gg = makeGun(gunKey); gg.g.rotation.y = Math.PI / 2; gg.g.position.y = .55; g.add(gg.g); g.userData.spin = gg.g; }
   else if (kind === 'med') {
     const b = new THREE.Mesh(new THREE.BoxGeometry(.5, .32, .38), MS('#f4f4f4')); b.position.y = .45; g.add(b);
     const c1 = new THREE.Mesh(new THREE.BoxGeometry(.3, .09, .4), MS('#e8343a')); c1.position.y = .45; const c2 = c1.clone(); c2.rotation.y = Math.PI / 2; g.add(c1, c2); g.userData.spin = b;
@@ -1159,7 +1167,7 @@ function lootMesh(kind, gunKey) {
   } else {
     for (let i = 0; i < 3; i++) { const p = new THREE.Mesh(new THREE.BoxGeometry(.9, .1, .22), MS('#b07a45')); p.position.set(0, .3 + i * .11, (i - 1) * .1); p.rotation.y = i * .3; g.add(p); }
   }
-  const col = kind === 'gun' ? GUN[gunKey].color : kind === 'med' ? '#5fe36f' : kind === 'shield' ? '#43b8ff' : '#e0a868';
+  const col = X.LOOT[kind] ? X.LOOT[kind].color : kind === 'gun' ? GUN[gunKey].color : kind === 'med' ? '#5fe36f' : kind === 'shield' ? '#43b8ff' : '#e0a868';
   const ring = new THREE.Mesh(lootRing, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .75, depthWrite: false }));
   ring.position.y = .06; g.add(ring);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(.04, .25, 2.2, 8, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -1177,6 +1185,7 @@ function dropLoot(a) {
   const s = a.inv.filter(Boolean)[0]; const p = a.pos;
   if (s) lootAdd('gun', p.x + rand(-1, 1), p.z + rand(-1, 1), s.w.key, s.w.mag);
   if (Math.random() < .6) lootAdd(Math.random() < .5 ? 'shield' : 'med', p.x + rand(-1, 1), p.z + rand(-1, 1));
+  X.dropLoot(a);
   if (a.mats > 0) lootAdd('wood', p.x + rand(-1, 1), p.z + rand(-1, 1));
 }
 function spawnLoot() {
@@ -1186,6 +1195,7 @@ function spawnLoot() {
   for (let i = 0; i < 34; i++) { const [x, z] = spot(); L('gun', x, z, GUNS[i % GUNS.length].key); }
   for (let i = 0; i < 26; i++) { const [x, z] = spot(); L(i % 2 ? 'med' : 'shield', x, z); }
   for (let i = 0; i < 18; i++) { const [x, z] = spot(); L('wood', x, z); }
+  X.spawnLoot(L, spot);
   // no meio da vila sempre tem alguma coisa
   for (const k of ['m5', 'stm', 'dd4', 'g95', 'c7', 'scar', 'tac']) { const [x, z] = spot(VILLA_R * .8); L('gun', x, z, k); }
   for (let i = 0; i < 4; i++) { const [x, z] = spot(VILLA_R * .8); L(i % 2 ? 'med' : 'shield', x, z); }
@@ -1199,6 +1209,7 @@ function giveGun(a, key, mag) {
   if (dropped) lootAdd('gun', a.pos.x + rand(-.6, .6), a.pos.z + rand(-.6, .6), dropped.w.key, dropped.mag);
 }
 function tryUse(a, l) {
+  const xu = X.tryUse(a, l); if (xu != null) { if (xu) lootTake(l); return xu; }
   if (l.kind === 'med') { if (a.hp >= 100) return false; a.hp = Math.min(100, a.hp + 50); }
   else if (l.kind === 'shield') { if (a.sh >= 100) return false; a.sh = Math.min(100, a.sh + 50); }
   else if (l.kind === 'wood') { a.mats = Math.min(500, a.mats + 60); }
@@ -1332,6 +1343,7 @@ function playerUpdate(dt) {
   const sl = slot(a), w = sl && sl.w;
   const fovK = camera.fov / 72;
   a.yaw -= input.dx * .0022 * fovK; a.pitch = clamp(a.pitch - input.dy * .0022 * fovK, -1.45, 1.45); input.dx = input.dy = 0;
+  if (X.drive(a, dt)) { input.firePressed = false; return; }
   a.bloom = Math.max(0, (a.bloom || 0) - dt * .12);
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const fwd = new V3(-Math.sin(a.yaw), 0, -Math.cos(a.yaw)), right = new V3(Math.cos(a.yaw), 0, -Math.sin(a.yaw));
@@ -1343,7 +1355,7 @@ function playerUpdate(dt) {
     return;
   }
   if (keys.Space && a.gliding && !a.chute && state.time - a.jumpT > .5) openChute(a);
-  const speed = a.gliding ? (a.chute ? 15 : 20) : input.ads ? 3.6 : a.sprint ? 9 : 6.2;
+  const speed = (a.gliding ? (a.chute ? 15 : 20) : input.ads ? 3.6 : a.sprint ? 9 : 6.2) * X.speedMul(a);
   wish.multiplyScalar(speed);
   if (keys.Space && a.onGround && !a.gliding) { a.vel.y = 8.4; a.onGround = false; }
   physics(a, wish, dt);
@@ -1414,6 +1426,7 @@ function updateCamera(dt) {
 // ---------- Bots ----------
 const _e = new V3(), _t = new V3();
 function botUpdate(a, dt) {
+  if (X.bot(a, dt)) return;
   const b = a.bot, D = DIFF[settings.diff];
   if (a.inBus) { busRide(a); if (state.time >= b.jumpAt) jumpOut(a); return; }
   b.think -= dt; b.goalT -= dt;
@@ -1522,6 +1535,7 @@ function animateRig(a, dt) {
     if (a.deathT > 1.6 && r.root.parent) { burst(a.pos.clone().setY(a.pos.y + .5), a.ch.color, 14, new V3(0, -1, 0), 3); scene.remove(r.root); }
     return;
   }
+  if (X.seat(a, dt)) return;
   setRigGun(r, a.gliding ? null : slot(a)?.w.key);
   for (const k in r.guns) { const f = r.guns[k].flash; if (f.visible) { f.userData.t -= dt; if (f.userData.t <= 0) f.visible = false; } }
   r.root.visible = !a.inBus || a === player;
@@ -1966,6 +1980,7 @@ function onNet(m) {
     case 'wall': if (!solids.some(s => s.id === m.id)) makeWall(m.id, m.x, m.z, !!m.ax, m.b); break;
     case 'wh': { const s = solids.find(x => x.id === m.id); if (s) wallHit(s, m.d, false); break; }
   }
+  X.onNet(m);
 }
 function connect(code) {
   if (net.ws) { const old = net.ws; net.ws = null; old.close(); }
@@ -2019,6 +2034,7 @@ function checkServer() {
 // ---------- Partida ----------
 function clearMatch() {
   startBus(false);
+  X.clear();
   for (const a of actors) scene.remove(a.rig.root); actors.length = 0; player = null;
   for (const s of solids.filter(s => s.built)) removeSolid(s);
   $('feed').innerHTML = ''; dnums.forEach(n => n.el.remove()); dnums.length = 0;
@@ -2064,7 +2080,7 @@ function startMatch(m) {
   });
   player = actors.find(a => a.kind === 'me'); player.bloom = 0; player.camDist = 6;
   vmSleeve.color.set(player.ch.color);
-  resetStorm(); spawnLoot(); stormMesh.visible = storm.on !== false;
+  resetStorm(); spawnLoot(); X.start(); stormMesh.visible = storm.on !== false;
   if (drop) storm.t = -(bus.dur + 8); // a tempestade só começa a contar depois do voo do ônibus
   state.time = 0; state.mode = 'play';
   $('lobby').hidden = true; $('end').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
@@ -2169,14 +2185,14 @@ function step(dt) {
       a.rig.tag.visible = a.seenByPlayer;
     }
     player.rig.tag.visible = false;
-    updateStorm(dt); updateLoot(dt); updateFx(dt);
+    updateStorm(dt); updateLoot(dt); updateFx(dt); X.update(dt);
     for (const k in vm.guns) { const f = vm.guns[k].flash; if (f.visible) { f.userData.t -= dt; if (f.userData.t <= 0) f.visible = false; } }
     Sfx.glide(player.alive && player.gliding && !player.inBus);
     updateBus(dt);
-    updateCamera(dt); hud(dt);
+    updateCamera(dt); X.afterCamera(dt); hud(dt);
   } else if (state.mode === 'over') {
     for (const a of actors) { if (a.kind === 'bot' && a.alive) botUpdate(a, dt); if (a.kind === 'remote') remoteUpdate(a, dt); animateRig(a, dt); }
-    updateLoot(dt);
+    updateLoot(dt); X.update(dt);
     net.t += dt; if (net.on && net.t >= .05) { net.t = 0; sendSnaps(); }
     updateStorm(dt); updateFx(dt); updateCamera(dt);
   } else if (state.mode === 'lobby') {
@@ -2248,6 +2264,12 @@ async function boot() {
     if (state.mode === 'lobby') { refreshPads(); if (!$('roster').contains(document.activeElement)) renderRoster(); }
   }
 }
+X.init({
+  THREE, GLTFLoader, scene, camera, actors, state, keys, input, net, GUN, storm, solids, HALF, flashLight, Sfx,
+  get player() { return player; }, rnd: () => mrng(), addShake: v => { shake = Math.max(shake, v); },
+  H, groundAt, free, raycast, canSee, damage, burst, tracer, showMsg, esc, dmgNumber, hitmarker, makeRig, dressRig, gltfs,
+  setRigGun, playClip, animateRig, slot, eye, lootAdd, byId, outside, aimDir,
+});
 boot();
 
 // gancho para testes automáticos
