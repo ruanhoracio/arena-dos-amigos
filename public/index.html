@@ -144,6 +144,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .stat { background: var(--panel); border-radius: 6px; padding: 4px 10px; display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; }
 .stat small { font-size: 11px; letter-spacing: 1.2px; color: var(--ink-dim); text-transform: uppercase; }
 .stat span { font-family: var(--font-d); font-size: 20px; }
+.nickRow { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-dim); margin-bottom: 8px; }
+.nickRow input { background: rgba(0, 0, 0, .3); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 600 16px var(--font-b); padding: 7px 9px; }
+.nickRow input:disabled { opacity: .75; }
+.nickRow.need input { border-color: #ffd23f; box-shadow: 0 0 0 2px rgba(255, 210, 63, .45); }
 .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
 .modes button { background: rgba(0, 0, 0, .3); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 600 13px var(--font-b); padding: 6px 4px; cursor: pointer; line-height: 1.15; }
 .modes button.on { background: #ffd23f; color: #1a1430; border-color: #ffd23f; }
@@ -242,6 +246,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
       <ol class="partyList" id="partyList"></ol>
       <div class="online">
         <p class="lbl">Jogar online</p>
+        <label class="nickRow" for="nickIn">Seu nome<input id="nickIn" type="text" maxlength="16" placeholder="Digite seu nome" autocomplete="nickname"></label>
         <div class="roomRow">
           <button class="ghost" id="createRoom" type="button" disabled>Criar sala</button>
           <input id="roomCode" type="text" placeholder="CÓDIGO" maxlength="6" disabled aria-label="Código da sala">
@@ -1818,6 +1823,7 @@ function placeOnPad(pad, ch) {
   pad.g.add(r.root); pad.rig = r;
 }
 function refreshPads() {
+  syncNick();
   if (lobbyTab === 'locker') { placeOnPad(pads[0], { ...roster[previewIdx], color: myInfo().color, skin: previewIdx === meIdx ? myInfo().skin : 'original' }); for (let i = 1; i < pads.length; i++) { placeOnPad(pads[i], null); pads[i].g.visible = false; } }
   else { const m = partyMembers(); pads.forEach((p, i) => { p.g.visible = i < 3; placeOnPad(p, m[i] || null); }); }
   $('meDot').style.background = myInfo().color; $('meName').textContent = myInfo().name;
@@ -1939,9 +1945,24 @@ function wallHit(s, d, send) {
   if (send) net.send({ t: 'wh', id: s.id, d });
   if (s.hp <= 0) removeSolid(s);
 }
+// nome de quem joga sem conta (com conta, vale o apelido da conta)
+const nick = () => String(store.get('nick', '') || '').trim().slice(0, 16);
+function syncNick() {
+  const el = $('nickIn'), on = Conta.logged();
+  el.disabled = on; if (document.activeElement !== el) el.value = on ? Conta.conta.perfil.name : nick();
+}
+$('nickIn').addEventListener('input', e => { store.set('nick', e.target.value.trim().slice(0, 16)); e.target.closest('.nickRow').classList.remove('need'); });
+$('nickIn').addEventListener('change', () => { refreshPads(); net.send({ t: 'me', ...myInfo() }); });
+$('nickIn').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+// para entrar ou criar sala precisa de um nome
+function needNick() {
+  if (Conta.logged() || nick()) return false;
+  const row = $('nickIn').closest('.nickRow'); row.classList.add('need'); $('nickIn').focus();
+  updateOnlineUI('Coloque seu nome antes de entrar na sala.'); return true;
+}
 function myInfo() {
   const r = roster[meIdx], L = Conta.look();
-  return { name: Conta.logged() ? Conta.conta.perfil.name : r.name, color: Conta.colorHex(L.color), charId: r.id, skin: L.skin, token: Conta.conta.token || undefined };
+  return { name: Conta.logged() ? Conta.conta.perfil.name : nick() || r.name, color: Conta.colorHex(L.color), charId: r.id, skin: L.skin, token: Conta.conta.token || undefined };
 }
 function sendSnaps() {
   const p = player; if (!p) return;
@@ -2047,14 +2068,15 @@ function updateOnlineUI(msg) {
   const pb = $('playBtn');
   pb.disabled = on && !isHost();
   pb.textContent = !on ? 'Jogar' : isHost() ? 'Iniciar partida' : 'Aguardando o líder';
-  renderModes();
+  renderModes(); syncNick();
 }
 $('createRoom').addEventListener('click', () => {
   if (net.on || net.ws) { leaveRoom(); return; }
+  if (needNick()) return;
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += A[(Math.random() * A.length) | 0];
   connect(c);
 });
-const joinCode = () => { const c = $('roomCode').value.trim().toUpperCase(); if (/^[A-Z0-9]{4,6}$/.test(c)) connect(c); else updateOnlineUI('O código tem 4 letras ou números.'); };
+const joinCode = () => { if (needNick()) return; const c = $('roomCode').value.trim().toUpperCase(); if (/^[A-Z0-9]{4,6}$/.test(c)) connect(c); else updateOnlineUI('O código tem 4 letras ou números.'); };
 $('joinRoom').addEventListener('click', joinCode);
 $('roomCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinCode(); });
 function checkServer() {
