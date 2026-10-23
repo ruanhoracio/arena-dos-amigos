@@ -243,7 +243,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
       <div class="mode panel">
         <small>Modo</small>
         <b>Battle Royale</b>
-        <span id="modeSub">Ilha dos Amigos · mapa 1</span>
+        <span id="modeSub">Vila Colorida</span>
         <div class="opts">
           <label for="diff">Bots
             <select id="diff"><option value="0">Fácil</option><option value="1" selected>Normal</option><option value="2">Difícil</option></select>
@@ -288,7 +288,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
         <dt>Q</dt><dd>constrói parede de madeira</dd>
         <dt>Esc</dt><dd>pausa</dd>
       </dl>
-      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. Animações do Mixamo.</p>
+      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Vila: “Village / Town Assets” por imwolfgang no Sketchfab (CC-BY 4.0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. Animações do Mixamo.</p>
     </aside>
   </div>
 </section>
@@ -356,6 +356,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Modelos do Tripo3D: coloque o .glb ao lado da página e registre pelo id do elenco.
 // Exemplo: ruan: 'models/ruan.glb'. Sem arquivo, o jogo usa o boneco provisório.
@@ -455,10 +456,11 @@ scene.add(sun, sun.target);
 // ---------- Mapa ----------
 Math.random = mulberry(20261022); // mapa idêntico para todos os jogadores
 const HALF = 116;
+const VS = 2.8, VILLA_R = 19 * VS; // vila do centro (modelo 3D) escalada para o tamanho dos bonecos
 function H(x, z) {
   let h = 2.4 * Math.sin(x * .034 + 1.3) * Math.cos(z * .029 - .4) + 1.3 * Math.sin(x * .081 + z * .063) + .6 * Math.sin(z * .13 + x * .02);
   const d = Math.hypot(x, z);
-  h *= smooth(16, 42, d);
+  h *= smooth(VILLA_R + 2, VILLA_R + 30, d);
   h += Math.max(0, Math.max(Math.abs(x), Math.abs(z)) - 98) * .5;
   return h;
 }
@@ -471,10 +473,8 @@ function H(x, z) {
     const x = p.getX(i), z = p.getZ(i), y = H(x, z); p.setY(i, y);
     const d = Math.hypot(x, z), n = Math.sin(x * .21) * Math.cos(z * .17) + Math.sin(x * .05 + z * .09);
     c.copy(grassA).lerp(grassB, clamp(.5 + n * .35, 0, 1));
-    const path = Math.abs(Math.sin(x * .02 + Math.cos(z * .025) * 2) ) < .06 && d > 20;
+    const path = Math.abs(Math.sin(x * .02 + Math.cos(z * .025) * 2) ) < .06 && d > VILLA_R + 4;
     if (path) c.lerp(dirt, .75);
-    if (d < 15) c.copy(stone).multiplyScalar(.92 + .08 * Math.sin(x * 3) * Math.sin(z * 3));
-    else if (d < 17) c.lerp(stone, .6);
     if (y > 5) c.lerp(new THREE.Color('#7a8a5a'), clamp((y - 5) / 6, 0, .7));
     cols.push(c.r, c.g, c.b);
   }
@@ -502,28 +502,6 @@ function addSolid(x, z, w, d, base, top, mat, opts = {}) {
   const s = { min: new V3(x - w / 2, base, z - d / 2), max: new V3(x + w / 2, top, z + d / 2), mesh, ...opts };
   solids.push(s); return s;
 }
-function wallTexture(base, win) {
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = base; g.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * .05})`; g.fillRect(Math.random() * 128, Math.random() * 128, 3, 3); }
-  g.fillStyle = win; g.fillRect(34, 30, 60, 50);
-  g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(36, 32, 26, 46);
-  g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(30, 80, 68, 6);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
-}
-const wallTex = [wallTexture('#e8dcc4', '#2c4a63'), wallTexture('#c9d6de', '#26384a'), wallTexture('#e7b9a0', '#3a2f3f'), wallTexture('#d9e2b8', '#2c4a3a')];
-function building(x, z, w, d, h) {
-  const [lo, hi] = minMaxH(x, z, w, d);
-  const t = pick(wallTex).clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(w / 3.4)), Math.max(1, Math.round(h / 3.2)));
-  const tz = t.clone(); tz.needsUpdate = true; tz.repeat.set(Math.max(1, Math.round(d / 3.4)), t.repeat.y);
-  const mx = new THREE.MeshStandardMaterial({ map: t, roughness: .85 }), mz = new THREE.MeshStandardMaterial({ map: tz, roughness: .85 });
-  const roof = new THREE.MeshStandardMaterial({ color: '#5a4a44', roughness: .9 });
-  const s = addSolid(x, z, w, d, lo - .5, hi + h, [mz, mz, roof, roof, mx, mx]);
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(w + .5, .4, d + .5), new THREE.MeshStandardMaterial({ color: '#3f3532', roughness: .9 }));
-  rim.position.set(x, hi + h + .1, z); rim.castShadow = true; scene.add(rim);
-  footprints.push([x, z, Math.hypot(w, d) / 2 + 1]);
-  return s;
-}
 const woodMat = new THREE.MeshStandardMaterial({ color: '#b07a45', roughness: .8 });
 const crateTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
@@ -537,31 +515,27 @@ function crate(x, z, s = 1.2, stack = 1) {
   for (let i = 0; i < stack; i++) addSolid(x, z, s, s, b + i * s, b + (i + 1) * s, crateMat);
   footprints.push([x, z, s]);
 }
-const contCols = ['#c4452f', '#2f6fb0', '#3c8c4a', '#d39a2a'].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: .6, metalness: .2 }));
-function container(x, z, rot) {
-  const w = rot ? 2.5 : 6, d = rot ? 6 : 2.5, [lo] = minMaxH(x, z, w, d);
-  addSolid(x, z, w, d, lo - .3, lo + 2.6, pick(contCols)); footprints.push([x, z, 3.4]);
+// sítios em volta da vila, montados com as peças soltas do pacote (o modelo entra quando carrega)
+const villaSpots = []; // [peça, x, y, z, rotação]
+const PIECE_R = { House_2Story_Purple: 4, House_Purple: 4.5, House_Blue: 4, House_Red: 4, Barn: 7.5, Windmill: 6, Chapel: 7, 'Sphere.001': 3.2, Hay_Pile: 2, Hay_Cart: 2.2, Well: 2, Market: 3.2, Fountain: 3.2 };
+function piece(name, x, z, rot) {
+  const r = PIECE_R[name], [lo] = minMaxH(x, z, r * 1.4, r * 1.4);
+  villaSpots.push([name, x, lo, z, rot]); footprints.push([x, z, r]);
 }
-
-// cidade em volta da praça
-[[-24, -22, 12, 9, 7], [23, -24, 10, 12, 9], [-26, 22, 11, 10, 6], [25, 24, 13, 9, 8], [0, -36, 14, 8, 6], [2, 38, 10, 10, 11],
- [-40, 2, 8, 14, 7], [41, 0, 9, 12, 6], [-58, -46, 10, 10, 8], [60, 50, 12, 8, 7], [-62, 44, 9, 9, 6], [58, -52, 11, 11, 9]].forEach(b => building(...b));
-// galpões baixos com caixas de escada (dá para subir no telhado)
-for (const [x, z] of [[-12, 30], [14, -32]]) {
-  const [lo, hi] = minMaxH(x, z, 6, 5); addSolid(x, z, 6, 5, lo - .4, hi + 2.9, woodMat); footprints.push([x, z, 4.2]);
-  crate(x + 4.1, z, 1.2, 1); crate(x + 4.1, z + 1.3, 1.2, 2);
+function farm(x, z, parts) {
+  const rot = rand(0, TAU), c = Math.cos(rot), sn = Math.sin(rot);
+  for (const [name, dx, dz, r = 0] of parts) piece(name, x + dx * c + dz * sn, z - dx * sn + dz * c, rot + r);
 }
-// fonte da praça
-{
-  const g = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.3, .8, 28), new THREE.MeshStandardMaterial({ color: '#b8b2a6', roughness: .8 }));
-  g.position.set(0, .4, 0); g.castShadow = g.receiveShadow = true; scene.add(g);
-  const w = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, .1, 28), new THREE.MeshStandardMaterial({ color: '#4aa3d8', roughness: .15, metalness: .1 }));
-  w.position.set(0, .78, 0); scene.add(w);
-  solids.push({ min: new V3(-2.3, -1, -2.3), max: new V3(2.3, .8, 2.3) });
-  footprints.push([0, 0, 4]);
-}
-for (let i = 0; i < 26; i++) { const a = rand(0, TAU), r = rand(9, 70), x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, 1.6)) crate(x, z, 1.2, Math.random() < .3 ? 2 : 1); }
-for (let i = 0; i < 16; i++) { const a = rand(0, TAU), r = rand(30, 100), x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, 3.6)) container(x, z, Math.random() < .5); }
+farm(-62, 44, [['Barn', 0, 0], ['Sphere.001', 8.5, 1], ['Hay_Pile', -2, 9], ['Hay_Cart', 4, 9]]);
+farm(62, 50, [['Chapel', 0, 0], ['Well', 9, 4]]);
+farm(-60, -48, [['House_2Story_Purple', 0, 0], ['House_Red', 7, 0], ['Well', 3.5, 8]]);
+farm(60, -54, [['Windmill', 0, 0], ['Hay_Cart', 9, 3], ['Hay_Pile', -8, 4]]);
+farm(0, -90, [['House_Blue', -5, 0], ['House_Purple', 5, 0], ['Market', 0, 8]]);
+farm(4, 90, [['Barn', 0, 0], ['Windmill', 12, -2], ['Hay_Pile', -9, 5]]);
+farm(-92, 4, [['House_2Story_Purple', 0, -4], ['House_Blue', 0, 4], ['Fountain', 8, 0]]);
+farm(92, -2, [['Chapel', 0, 0], ['Market', -8, 6, Math.PI / 2]]);
+for (let i = 0; i < 26; i++) { const a = rand(0, TAU), r = rand(VILLA_R + 4, 95), x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, 1.6)) crate(x, z, 1.2, Math.random() < .3 ? 2 : 1); }
+for (let i = 0; i < 16; i++) { const a = rand(0, TAU), r = rand(VILLA_R + 6, 100), x = Math.cos(a) * r, z = Math.sin(a) * r, k = pick(['Hay_Pile', 'Hay_Cart', 'Well', 'Market']); if (free(x, z, PIECE_R[k] + 1)) piece(k, x, z, rand(0, TAU)); }
 // árvores e pedras (os modelos do pacote de natureza entram por cima quando carregam)
 const clouds = [], natSpots = [], procNature = [];
 const NAT = {
@@ -572,7 +546,7 @@ const NAT = {
   const trunks = [], tops = [];
   for (let i = 0, n = 0; i < 600 && n < 150; i++) {
     const x = rand(-HALF + 6, HALF - 6), z = rand(-HALF + 6, HALF - 6);
-    if (Math.hypot(x, z) < 34 || !free(x, z, 2.2)) continue;
+    if (Math.hypot(x, z) < VILLA_R + 3 || !free(x, z, 2.2)) continue;
     const s = rand(.8, 1.35), y = H(x, z); trunks.push([x, y, z, s]); tops.push([x, y, z, s]); n++;
     footprints.push([x, z, 1.4]);
     solids.push({ min: new V3(x - .35 * s, y - 1, z - .35 * s), max: new V3(x + .35 * s, y + 5 * s, z + .35 * s) });
@@ -582,16 +556,16 @@ const NAT = {
   // arbustos e flores (só enfeite, sem colisão)
   for (let i = 0, n = 0; i < 900 && n < 240; i++) {
     const x = rand(-HALF + 4, HALF - 4), z = rand(-HALF + 4, HALF - 4);
-    if (Math.hypot(x, z) < 20 || !free(x, z, .8)) continue; n++;
+    if (Math.hypot(x, z) < VILLA_R || !free(x, z, .8)) continue; n++;
     natSpots.push([pick(NAT.bush), x, H(x, z), z, rand(1.5, 2.3), rand(0, TAU)]);
   }
   for (let i = 0; i < 70; i++) { // canteiros de flores
-    const cx = rand(-HALF + 6, HALF - 6), cz = rand(-HALF + 6, HALF - 6); if (Math.hypot(cx, cz) < 18) continue;
+    const cx = rand(-HALF + 6, HALF - 6), cz = rand(-HALF + 6, HALF - 6); if (Math.hypot(cx, cz) < VILLA_R + 3) continue;
     const kind = pick(NAT.flower);
     for (let k = 0; k < 9; k++) { const x = cx + rand(-3, 3), z = cz + rand(-3, 3); if (free(x, z, .2)) natSpots.push([kind, x, H(x, z), z, rand(1.4, 2.1), rand(0, TAU)]); }
   }
   for (let i = 0; i < 2600; i++) {
-    const x = rand(-HALF, HALF), z = rand(-HALF, HALF); if (Math.hypot(x, z) < 17 || !free(x, z, 0)) continue;
+    const x = rand(-HALF, HALF), z = rand(-HALF, HALF); if (Math.hypot(x, z) < VILLA_R || !free(x, z, 0)) continue;
     natSpots.push([pick(NAT.grass), x, H(x, z) - .03, z, rand(1.6, 2.6), rand(0, TAU)]);
   }
   const tg = new THREE.CylinderGeometry(.22, .34, 1, 7); tg.translate(0, .5, 0);
@@ -610,7 +584,7 @@ const NAT = {
   const rockMat = new THREE.MeshStandardMaterial({ color: '#8d8c86', roughness: 1, flatShading: true });
   for (let i = 0, n = 0; i < 300 && n < 40; i++) {
     const x = rand(-HALF + 6, HALF - 6), z = rand(-HALF + 6, HALF - 6), s = rand(1, 2.6);
-    if (Math.hypot(x, z) < 30 || !free(x, z, s + 1)) continue; n++;
+    if (Math.hypot(x, z) < VILLA_R + 4 || !free(x, z, s + 1)) continue; n++;
     const r = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
     const y = H(x, z); r.position.set(x, y + s * .35, z); r.scale.y = .7; r.rotation.set(rand(0, 3), rand(0, 3), 0);
     r.castShadow = r.receiveShadow = true; scene.add(r); footprints.push([x, z, s]);
@@ -620,7 +594,7 @@ const NAT = {
   const bg = new THREE.ConeGeometry(.08, .5, 3); bg.translate(0, .25, 0);
   const grass = new THREE.InstancedMesh(bg, new THREE.MeshStandardMaterial({ color: '#7fb04a', roughness: 1 }), 5000);
   for (let i = 0; i < 5000; i++) {
-    const x = rand(-HALF, HALF), z = rand(-HALF, HALF); if (Math.hypot(x, z) < 18) { m.makeScale(0, 0, 0); grass.setMatrixAt(i, m); continue; }
+    const x = rand(-HALF, HALF), z = rand(-HALF, HALF); if (Math.hypot(x, z) < VILLA_R) { m.makeScale(0, 0, 0); grass.setMatrixAt(i, m); continue; }
     q.setFromEuler(new THREE.Euler(rand(-.3, .3), rand(0, TAU), rand(-.3, .3)));
     const s = rand(.6, 1.4); m.compose(new V3(x, H(x, z) - .05, z), q, new V3(s, s, s)); grass.setMatrixAt(i, m);
   }
@@ -671,6 +645,55 @@ function buildNature(gltf) {
     if (x.transparent || /Leaves|Flower|Grass/.test(x.name)) { x.transparent = false; x.alphaTest = .45; x.side = THREE.DoubleSide; x.depthWrite = true; }
   }
   for (const o of procNature) o.visible = false;
+}
+
+// vila do centro e sítios (“Village / Town Assets”, imwolfgang, CC-BY 4.0): tudo vira uma malha só, e cada peça grande ganha uma caixa de colisão
+function floatGeo(g) {
+  const o = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal', 'uv']) {
+    const a = g.attributes[k]; if (!a) continue;
+    const n = a.itemSize, arr = new Float32Array(a.count * n), get = [a.getX, a.getY, a.getZ, a.getW];
+    for (let i = 0; i < a.count; i++) for (let j = 0; j < n; j++) arr[i * n + j] = get[j].call(a, i);
+    o.setAttribute(k, new THREE.BufferAttribute(arr, n));
+  }
+  const cnt = g.attributes.position.count;
+  o.setIndex(new THREE.BufferAttribute(g.index ? Uint32Array.from(g.index.array) : Uint32Array.from({ length: cnt }, (_, i) => i), 1));
+  if (!o.attributes.normal) o.computeVertexNormals();
+  return o;
+}
+const NO_COLLIDE = /^(World|Plane|Farm_|Daisy|Shroom|StonePath|Pond|Grave|Coffin|Garland|Arch|Picnic|Cube|Cylinder)/;
+function villaPiece(node, P, geos) {
+  const gs = [], mm = new THREE.Matrix4();
+  node.traverse(o => { if (o.isMesh) { const g = floatGeo(o.geometry).applyMatrix4(mm.multiplyMatrices(P, o.matrixWorld)); gs.push(g); geos.push(g); } });
+  if (!gs.length || NO_COLLIDE.test(node.name)) return;
+  let lo = 1e9, hi = -1e9;
+  for (const g of gs) { g.computeBoundingBox(); lo = Math.min(lo, g.boundingBox.min.y); hi = Math.max(hi, g.boundingBox.max.y); }
+  if (hi - lo < .7) return;
+  // a caixa usa a base da peça: paredes da casa, torre do moinho, tronco da árvore (telhado e pás ficam de fora)
+  const cut = lo + Math.max(.6, (hi - lo) * .2), base = new THREE.Box3(), v = new V3();
+  for (const g of gs) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) < cut) base.expandByPoint(v.fromBufferAttribute(p, i)); }
+  if (base.isEmpty()) return;
+  solids.push({ min: new V3(base.min.x, lo - .3, base.min.z), max: new V3(base.max.x, hi, base.max.z) });
+  footprints.push([(base.min.x + base.max.x) / 2, (base.min.z + base.max.z) / 2, Math.hypot(base.max.x - base.min.x, base.max.z - base.min.z) / 2 + .6]);
+}
+function buildVilla([gv, gp]) {
+  const geos = [], P = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new V3(0, 1, 0);
+  gv.scene.updateMatrixWorld(true); gp.scene.updateMatrixWorld(true);
+  const rootV = gv.scene.getObjectByName('RootNode'), rootP = gp.scene.getObjectByName('RootNode');
+  let mat = null; gv.scene.traverse(o => { if (o.isMesh && !mat) mat = o.material; });
+  P.compose(new V3(0, .03, 0), q, new V3(VS, VS, VS));
+  for (const n of rootV.children) if (n.name !== 'World') villaPiece(n, P, geos);
+  const box = new THREE.Box3(), c = new V3(), T = new THREE.Matrix4();
+  for (const [name, x, y, z, rot] of villaSpots) {
+    const n = rootP.children.find(o => o.name.startsWith(name)); if (!n) continue;
+    box.setFromObject(n); box.getCenter(c);
+    P.compose(new V3(x, y, z), q.setFromAxisAngle(up, rot), new V3(VS, VS, VS)).multiply(T.makeTranslation(-c.x, -box.min.y, -c.z));
+    villaPiece(n, P, geos);
+  }
+  mat.metalness = 0; mat.roughness = .8;
+  const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
+  mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh);
+  for (const g of geos) g.dispose();
 }
 
 // ---------- Armas (modelos GLB) ----------
@@ -1157,13 +1180,13 @@ function dropLoot(a) {
 function spawnLoot() {
   while (loot.length) removeLoot(loot[0]);
   let n = 0; const L = (kind, x, z, k) => addLoot(kind, x, z, k, undefined, 'L' + (n++));
-  const spot = () => { for (let i = 0; i < 40; i++) { const a = mr(0, TAU), r = Math.sqrt(mrng()) * (HALF - 10), x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, .8)) return [x, z]; } return [mr(-10, 10), mr(-10, 10)]; };
+  const spot = (R = HALF - 10) => { for (let i = 0; i < 40; i++) { const a = mr(0, TAU), r = Math.sqrt(mrng()) * R, x = Math.cos(a) * r, z = Math.sin(a) * r; if (free(x, z, .8)) return [x, z]; } return [mr(-10, 10), mr(-10, 10)]; };
   for (let i = 0; i < 34; i++) { const [x, z] = spot(); L('gun', x, z, GUNS[i % GUNS.length].key); }
   for (let i = 0; i < 26; i++) { const [x, z] = spot(); L(i % 2 ? 'med' : 'shield', x, z); }
   for (let i = 0; i < 18; i++) { const [x, z] = spot(); L('wood', x, z); }
-  // perto da praça sempre tem alguma coisa
-  for (const [x, z, k] of [[6, 6, 'm5'], [-6, 6, 'stm'], [6, -6, 'dd4'], [-6, -6, 'g95'], [0, 9, 'c7']]) L('gun', x, z, k);
-  for (const [x, z] of [[9, 0], [-9, 0]]) L('shield', x, z);
+  // no meio da vila sempre tem alguma coisa
+  for (const k of ['m5', 'stm', 'dd4', 'g95', 'c7', 'scar', 'tac']) { const [x, z] = spot(VILLA_R * .8); L('gun', x, z, k); }
+  for (let i = 0; i < 4; i++) { const [x, z] = spot(VILLA_R * .8); L(i % 2 ? 'med' : 'shield', x, z); }
 }
 function giveGun(a, key, mag) {
   let i = a.inv.findIndex(s => !s);
@@ -1563,7 +1586,6 @@ function drawMapBase() {
   for (let py = 0; py < 360; py++) for (let px = 0; px < 360; px++) {
     const x = px / 360 * MAPS - MAPS / 2, z = py / 360 * MAPS - MAPS / 2, h = H(x, z), d = Math.hypot(x, z);
     let r = 92 + h * 6, gg = 150 + h * 5, b = 70;
-    if (d < 16) { r = gg = 165; b = 155; }
     const i = (py * 360 + px) * 4; img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
@@ -1953,7 +1975,7 @@ function updateOnlineUI(msg) {
   const pb = $('playBtn');
   pb.disabled = on && !isHost();
   pb.textContent = !on ? 'Jogar' : isHost() ? 'Iniciar partida' : 'Aguardando o líder';
-  $('modeSub').textContent = on ? 'Online · bots completam a partida' : 'Ilha dos Amigos · mapa 1';
+  $('modeSub').textContent = on ? 'Online · bots completam a partida' : 'Vila Colorida';
 }
 $('createRoom').addEventListener('click', () => {
   if (net.on || net.ws) { leaveRoom(); return; }
@@ -2177,13 +2199,14 @@ async function boot() {
   // só o boneco escolhido entra na abertura; os outros carregam depois, já no lobby
   const first = MODELS[roster[meIdx].id] ? [roster[meIdx].id] : [], later = Object.keys(MODELS).filter(k => !first.includes(k));
   const loadModel = k => loadB64(loader, MODELS[k]).then(m => { gltfs[k] = m; }).catch(e => console.warn('Modelo não carregou:', k, e));
-  let done = 0; const total = GUNS.length + first.length + Object.keys(PROPS).length + 1;
+  let done = 0; const total = GUNS.length + first.length + Object.keys(PROPS).length + 2;
   const bar = () => { const p = Math.min(done / total, (performance.now() - t0) / INTRO); $('loadFill').style.width = (p * 100).toFixed(1) + '%'; $('loadTxt').textContent = `CARREGANDO ${Math.round(p * 100)}%`; return p; };
   const barLoop = () => { if (bar() < 1) requestAnimationFrame(barLoop); };
   barLoop();
   const tick = () => { ++done; };
   await Promise.all([
     loadB64(loader, 'models/natureza.glb.txt').then(buildNature).catch(e => console.warn('Natureza não carregou:', e)).finally(tick),
+    Promise.all([loadB64(loader, 'models/vila-mapa.glb.txt'), loadB64(loader, 'models/vila-pecas.glb.txt')]).then(buildVilla).catch(e => console.warn('Vila não carregou:', e)).finally(tick),
     ...GUNS.map(g => loadB64(loader, 'models/armas/' + g.file + '.txt').then(m => prepGun(g, m)).catch(e => console.warn('Arma não carregou:', g.file, e)).finally(tick)),
     ...Object.entries(PROPS).map(([k, url]) => loadB64(loader, url).then(m => { props[k] = m; }).catch(e => console.warn('Modelo não carregou:', k, e)).finally(tick)),
     ...first.map(k => loadModel(k).finally(tick)),
