@@ -288,7 +288,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
         <dt>Q</dt><dd>constrói parede de madeira</dd>
         <dt>Esc</dt><dd>pausa</dd>
       </dl>
-      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. Animações do Mixamo.</p>
+      <p class="credits">Armas: “low-poly Colt M5 SCW”, “DD4 X1”, “Diemaco C7 CT”, “G95 A1” e “STM-556” por D_U; “Fortnite Assault Rifle” por DevSmart; “Scar - Fortnite Gun” por Skyrush; “Fortnite bolt-action rifle” por VincentJ; “Fortnite Tac Shotgun” por Michele.Passerino. Todas no Sketchfab, licença CC-BY 4.0. Árvores, arbustos, flores e grama: “Ultimate Stylized Nature” por Quaternius (CC0). Ônibus de batalha: “Battle Bus” por CoolCat, enviado por RamonaFlowers; paraquedas: “Parachute - Low Poly” por calebcram (Sketchfab, CC-BY 4.0). Personagens (Sketchfab, CC-BY 4.0): Spice por Eveston - Elite Big Speakerman - Hugo; Midas, Renegade Raider, Snake Eyes, Drift e Jules por SketchSupreme; Master Chief (Halo Infinite) por bensimulator2. Animações do Mixamo.</p>
     </aside>
   </div>
 </section>
@@ -360,6 +360,8 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 // Modelos do Tripo3D: coloque o .glb ao lado da página e registre pelo id do elenco.
 // Exemplo: ruan: 'models/ruan.glb'. Sem arquivo, o jogo usa o boneco provisório.
 const MODELS = Object.fromEntries(['spice', 'midas', 'renegade', 'masterchief', 'snakeeyes', 'drift', 'jules'].map(k => [k, `models/personagens/${k}.glb.txt`]));
+// ônibus de batalha e paraquedas (Sketchfab, CC-BY 4.0)
+const PROPS = { onibus: 'models/veiculos/onibus.glb.txt', paraquedas: 'models/veiculos/paraquedas.glb.txt' }, props = {};
 
 const ROSTER_DEFAULT = [
   { id: 'spice', name: 'Abóbora', color: '#ff7a1a' },
@@ -784,8 +786,14 @@ function makeRig(ch) {
   const parts = []; body.traverse(o => o.isMesh && parts.push(o));
   const gunMount = new THREE.Group(); gunMount.position.set(.13, .44, -.18); torso.add(gunMount);
   const glider = new THREE.Group(); glider.position.y = 2.45; glider.visible = false; root.add(glider);
-  const sail = new THREE.Mesh(new THREE.BoxGeometry(2.6, .05, 1.1), col); sail.rotation.x = .12; sail.castShadow = true; glider.add(sail);
-  for (const x of [-.5, .5]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(.015, .015, 1.6), darkMat); r.position.set(x * .6, -.75, 0); r.rotation.z = x * .5; glider.add(r); }
+  if (props.paraquedas) {
+    // modelo com as cordas presas embaixo: a barra fica nas costas do boneco
+    const m = props.paraquedas.scene.clone(); m.scale.setScalar(.36); m.position.set(0, -1.05, .15); m.rotation.x = .1;
+    m.traverse(o => { if (o.isMesh) o.castShadow = true; }); glider.add(m);
+  } else {
+    const sail = new THREE.Mesh(new THREE.BoxGeometry(2.6, .05, 1.1), col); sail.rotation.x = .12; sail.castShadow = true; glider.add(sail);
+    for (const x of [-.5, .5]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(.015, .015, 1.6), darkMat); r.position.set(x * .6, -.75, 0); r.rotation.z = x * .5; glider.add(r); }
+  }
   const tag = nameSprite(ch.name, ch.color); tag.position.y = 2.2; root.add(tag);
   return { root, body, hips, torso, head, legL, legR, parts, gunMount, guns: {}, curGun: null, glider, tag, phase: 0, glb: null };
 }
@@ -905,15 +913,18 @@ function collide(p) {
   p.x = clamp(p.x, -HALF, HALF); p.z = clamp(p.z, -HALF, HALF);
 }
 function physics(a, wish, dt) {
-  const k = a.onGround ? 14 : a.gliding ? 2.5 : 4;
+  if (a.inBus) { busRide(a); return; }
+  const k = a.onGround ? 14 : a.gliding ? (a.chute ? 2.5 : 1.2) : 4;
   a.vel.x = damp(a.vel.x, wish.x, k, dt); a.vel.z = damp(a.vel.z, wish.z, k, dt);
-  a.vel.y -= GRAV * dt * (a.gliding ? .3 : 1);
-  if (a.gliding) a.vel.y = Math.max(a.vel.y, -8);
+  a.vel.y -= GRAV * dt * (a.gliding && a.chute ? .3 : 1);
+  // queda livre até ~-22 m/s; o paraquedas freia aos poucos até -7
+  if (a.gliding) a.vel.y = a.chute ? (a.vel.y < -7 ? damp(a.vel.y, -7, 5, dt) : a.vel.y) : Math.max(a.vel.y, -22);
   a.pos.x += a.vel.x * dt; a.pos.z += a.vel.z * dt; collide(a.pos);
   const oy = a.pos.y; a.pos.y += a.vel.y * dt;
   if (a.vel.y > 0) for (const s of solids) if (a.pos.x > s.min.x && a.pos.x < s.max.x && a.pos.z > s.min.z && a.pos.z < s.max.z && oy + HEIGHT <= s.min.y + .01 && a.pos.y + HEIGHT > s.min.y) { a.pos.y = s.min.y - HEIGHT; a.vel.y = 0; }
   const g = groundAt(a.pos.x, a.pos.z, Math.max(oy, a.pos.y));
-  if (a.gliding && a.pos.y - g < 1.6) { a.gliding = false; if (a === player) showMsg('Pousou!', 'Ache um escudo e uma arma melhor', 2.5); }
+  if (a.gliding && !a.chute && a.pos.y - g < 30) openChute(a);
+  if (a.gliding && a.pos.y - g < 1.6) { a.gliding = a.chute = false; if (a === player) showMsg('Pousou!', 'Ache um escudo e uma arma melhor', 2.5); }
   if (a.pos.y <= g) { a.pos.y = g; if (a.vel.y < 0) a.vel.y = 0; a.onGround = true; }
   else if (!a.gliding && a.vel.y <= 0 && a.pos.y - g < .35 && a.onGround) { a.pos.y = g; a.vel.y = 0; }
   else a.onGround = false;
@@ -1185,6 +1196,51 @@ function updateLoot(dt) {
   }
 }
 
+// ---------- Ônibus de batalha ----------
+// cruza o mapa em linha reta no começo da partida; todos os clientes calculam o mesmo trajeto pela semente
+const BUS_H = 88, BUS_SPEED = 20, BUS_LEN = 300;
+const bus = { root: new THREE.Group(), on: false, from: new V3(), dir: new V3(1, 0, 0), dur: BUS_LEN / BUS_SPEED };
+bus.root.visible = false; scene.add(bus.root);
+function buildBus() {
+  if (props.onibus) {
+    const m = props.onibus.scene;
+    // modelo original tem ~63 de altura com o balão; o ônibus fica perto de y=0
+    m.scale.setScalar(.42);
+    m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    bus.root.add(m);
+  } else {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 11), MS('#2a4fb5')); bus.root.add(b);
+    const bal = new THREE.Mesh(new THREE.SphereGeometry(5, 20, 14), MS('#dfe8f2')); bal.position.y = 11; bus.root.add(bal);
+  }
+}
+function busAt(t, out = new V3()) { return out.copy(bus.from).addScaledVector(bus.dir, BUS_SPEED * t); }
+function startBus(on) {
+  bus.on = on; bus.root.visible = on;
+  if (!on) return;
+  const ang = mr(0, TAU), off = mr(-35, 35);
+  bus.dir.set(-Math.cos(ang), 0, -Math.sin(ang));
+  bus.from.set(Math.cos(ang) * BUS_LEN / 2 - bus.dir.z * off, BUS_H, Math.sin(ang) * BUS_LEN / 2 + bus.dir.x * off);
+  bus.root.rotation.y = Math.atan2(bus.dir.x, bus.dir.z);
+  updateBus(0);
+}
+function updateBus() {
+  if (!bus.on) return;
+  busAt(state.time, bus.root.position);
+  bus.root.position.y += Math.sin(state.time * 1.3) * .4;
+  if (state.time > bus.dur + 10) { bus.on = false; bus.root.visible = false; }
+}
+function busRide(a) {
+  busAt(Math.min(state.time, bus.dur), a.pos); a.pos.y -= 1; a.tp.copy(a.pos);
+  a.vel.copy(bus.dir).multiplyScalar(BUS_SPEED); a.onGround = false;
+}
+function jumpOut(a) {
+  a.inBus = false; a.gliding = true; a.chute = false; a.jumpT = state.time;
+  a.pos.y -= 3; a.vel.multiplyScalar(.5); a.vel.y = -2;
+  if (a === player) { Sfx.jump?.(); showMsg('Saltou!', 'ESPAÇO abre o paraquedas · WASD para guiar', 3); }
+}
+function openChute(a) { if (!a.chute) { a.chute = true; if (a === player) Sfx.chute?.(); } }
+const airState = a => a.inBus ? 2 : !a.gliding ? 0 : a.chute ? 1 : 3;
+
 // ---------- Tempestade ----------
 const PHASES = [{ wait: 30, shrink: 25, r: 92, dmg: 1 }, { wait: 25, shrink: 20, r: 58, dmg: 2 }, { wait: 20, shrink: 18, r: 32, dmg: 4 }, { wait: 16, shrink: 14, r: 15, dmg: 6 }, { wait: 12, shrink: 12, r: 5, dmg: 8 }, { wait: 10, shrink: 10, r: 0, dmg: 10 }];
 const storm = { c: new V3(), r: 175, fromC: new V3(), fromR: 175, toC: new V3(), toR: 92, phase: 0, t: 0, stage: 'wait', tick: 0 };
@@ -1205,6 +1261,7 @@ function pickNext() {
 }
 function resetStorm() { storm.c.set(0, 0, 0); storm.r = 175; storm.phase = 0; storm.t = 0; storm.stage = 'wait'; storm.tick = 0; pickNext(); }
 function updateStorm(dt) {
+  if (storm.on === false) { stormMesh.visible = false; return; }
   const P = PHASES[Math.min(storm.phase, PHASES.length - 1)];
   storm.t += dt;
   if (storm.stage === 'wait' && storm.t >= P.wait) { storm.stage = 'shrink'; storm.t = 0; showMsg('A tempestade está fechando!', 'Corra para o círculo branco no mapa', 2.5); Sfx.storm(); }
@@ -1255,7 +1312,13 @@ function playerUpdate(dt) {
   const fwd = new V3(-Math.sin(a.yaw), 0, -Math.cos(a.yaw)), right = new V3(Math.cos(a.yaw), 0, -Math.sin(a.yaw));
   const wish = fwd.multiplyScalar(f).addScaledVector(right, s); if (wish.lengthSq() > 1) wish.normalize();
   a.sprint = keys.ShiftLeft && f > 0 && !input.ads && !input.fire;
-  const speed = a.gliding ? 15 : input.ads ? 3.6 : a.sprint ? 9 : 6.2;
+  if (a.inBus) {
+    busRide(a);
+    if ((keys.Space && state.time > .6) || state.time >= bus.dur) jumpOut(a);
+    return;
+  }
+  if (keys.Space && a.gliding && !a.chute && state.time - a.jumpT > .5) openChute(a);
+  const speed = a.gliding ? (a.chute ? 15 : 20) : input.ads ? 3.6 : a.sprint ? 9 : 6.2;
   wish.multiplyScalar(speed);
   if (keys.Space && a.onGround && !a.gliding) { a.vel.y = 8.4; a.onGround = false; }
   physics(a, wish, dt);
@@ -1297,7 +1360,7 @@ function updateCamera(dt) {
     const pivot = new V3(a.pos.x, a.pos.y + 1.65, a.pos.z);
     const right = new V3(Math.cos(a.yaw), 0, -Math.sin(a.yaw));
     const dir = new V3(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch));
-    const dist = ads ? 1.5 : a.gliding ? 6.5 : 3.1, sh = ads ? .55 : .62;
+    const dist = a.inBus ? 16 : ads ? 1.5 : a.gliding ? (a.chute ? 6.5 : 8) : 3.1, sh = ads ? .55 : .62;
     a.camDist = damp(a.camDist || dist, dist, 10, dt);
     const from = pivot.clone().addScaledVector(right, sh * .5);
     const want = pivot.clone().addScaledVector(right, sh).addScaledVector(dir, -a.camDist).add(new V3(0, .25, 0));
@@ -1307,10 +1370,10 @@ function updateCamera(dt) {
   }
   camera.quaternion.setFromEuler(new THREE.Euler(a.pitch, a.yaw, 0, 'YXZ'));
   if (shake > 0) { camera.position.x += rand(-shake, shake) * .3; camera.position.y += rand(-shake, shake) * .3; shake = Math.max(0, shake - dt * .6); }
-  const fov = ads ? (first ? w.fov : Math.max(w.fov, 55)) : a.sprint ? 80 : a.gliding ? 85 : 72;
+  const fov = ads ? (first ? w.fov : Math.max(w.fov, 55)) : a.sprint ? 80 : a.gliding ? (a.chute || a.inBus ? 85 : 95) : 72;
   if (Math.abs(camera.fov - fov) > .05) { camera.fov = damp(camera.fov, fov, 14, dt); camera.updateProjectionMatrix(); }
   // corpo próprio
-  a.rig.root.visible = !first;
+  a.rig.root.visible = !first && !a.inBus;
   vm.root.visible = first && !scoped && !!w;
   if (w) vmGun(w.key);
   vm.adsK = damp(vm.adsK, ads ? 1 : 0, 16, dt);
@@ -1327,6 +1390,7 @@ function updateCamera(dt) {
 const _e = new V3(), _t = new V3();
 function botUpdate(a, dt) {
   const b = a.bot, D = DIFF[settings.diff];
+  if (a.inBus) { busRide(a); if (state.time >= b.jumpAt) jumpOut(a); return; }
   b.think -= dt; b.goalT -= dt;
   const e = eye(a, _e);
   if (b.think <= 0) {
@@ -1340,7 +1404,7 @@ function botUpdate(a, dt) {
     b.chase = !best && b.lastHit && b.lastHit.alive && state.time - b.lastHitT < 4 ? b.lastHit : null;
     const P = PHASES[Math.min(storm.phase, PHASES.length - 1)];
     const late = storm.stage === 'shrink' || storm.t > P.wait * .4;
-    if (!a.gliding && (outside(a.pos, storm.c, storm.r - 4) || (late && outside(a.pos, storm.toC, Math.max(3, storm.toR - 3))))) {
+    if (!a.gliding && storm.on !== false && (outside(a.pos, storm.c, storm.r - 4) || (late && outside(a.pos, storm.toC, Math.max(3, storm.toR - 3))))) {
       b.mode = 'storm'; b.goal.set(storm.toC.x + rand(-3, 3), 0, storm.toC.z + rand(-3, 3));
     } else if (b.target) b.mode = 'fight';
     else if (b.chase) { b.mode = 'chase'; b.goal.copy(b.chase.pos); }
@@ -1435,7 +1499,12 @@ function animateRig(a, dt) {
   }
   setRigGun(r, a.gliding ? null : slot(a)?.w.key);
   for (const k in r.guns) { const f = r.guns[k].flash; if (f.visible) { f.userData.t -= dt; if (f.userData.t <= 0) f.visible = false; } }
-  r.glider.visible = a.gliding;
+  r.root.visible = !a.inBus || a === player;
+  r.glider.visible = a.gliding && a.chute;
+  // paraquedas abre crescendo; em queda livre o corpo fica deitado
+  r.chuteK = a.gliding && a.chute ? Math.min(1, (r.chuteK || 0) + dt * 3) : 0;
+  r.glider.scale.setScalar(.2 + .8 * (1 - (1 - r.chuteK) ** 3));
+  r.body.rotation.x = damp(r.body.rotation.x, a.gliding && !a.chute && !a.inBus ? -1.15 : 0, 6, dt);
   const sp = Math.hypot(a.vel.x, a.vel.z);
   r.phase += dt * sp * 1.7;
   const amp = a.onGround ? Math.min(.9, sp * .12) : .25;
@@ -1507,9 +1576,17 @@ const toMap = v => (v + MAPS / 2) / MAPS * 360;
 function drawMini() {
   mctx.drawImage(mapBase, 0, 0);
   for (const s of solids) if (s.built) { mctx.fillStyle = '#c08850'; mctx.fillRect(toMap(s.min.x), toMap(s.min.z), Math.max(2, (s.max.x - s.min.x) / MAPS * 360), Math.max(2, (s.max.z - s.min.z) / MAPS * 360)); }
+  if (bus.on && player?.inBus) {
+    // trajeto do ônibus
+    const a = busAt(0), b = busAt(bus.dur), c = busAt(state.time);
+    mctx.strokeStyle = 'rgba(255,255,255,.8)'; mctx.lineWidth = 3; mctx.setLineDash([8, 6]); mctx.beginPath(); mctx.moveTo(toMap(a.x), toMap(a.z)); mctx.lineTo(toMap(b.x), toMap(b.z)); mctx.stroke(); mctx.setLineDash([]);
+    mctx.fillStyle = '#3b6cff'; mctx.beginPath(); mctx.arc(toMap(c.x), toMap(c.z), 6, 0, TAU); mctx.fill();
+  }
+  if (storm.on !== false) {
   mctx.save(); mctx.beginPath(); mctx.rect(0, 0, 360, 360); mctx.arc(toMap(storm.c.x), toMap(storm.c.z), storm.r / MAPS * 360, 0, TAU, true);
   mctx.fillStyle = 'rgba(150,60,230,.45)'; mctx.fill('evenodd'); mctx.restore();
   mctx.strokeStyle = '#fff'; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(toMap(storm.toC.x), toMap(storm.toC.z), Math.max(1, storm.toR / MAPS * 360), 0, TAU); mctx.stroke();
+  }
   if (player) {
     mctx.save(); mctx.translate(toMap(player.pos.x), toMap(player.pos.z)); mctx.rotate(-player.yaw);
     mctx.fillStyle = '#ffd23f'; mctx.strokeStyle = '#000'; mctx.lineWidth = 2;
@@ -1529,7 +1606,7 @@ function hud(dt) {
   setT('reloadMsg', a.reload > 0 ? 'Recarregando…' : sl && sl.mag === 0 ? 'Sem munição · R' : '');
   $('prompt').innerHTML = nearGun && a.alive ? `<b>E</b> pegar ${esc(GUN[nearGun.gun].name)}` : '';
   const P = PHASES[Math.min(storm.phase, PHASES.length - 1)];
-  setT('stormInfo', storm.stage === 'wait' ? `Tempestade fecha em ${fmt(Math.max(0, P.wait - storm.t))}` : storm.toR === 0 && storm.r < 6 ? 'Círculo final' : 'Tempestade fechando!');
+  setT('stormInfo', storm.on === false ? '' : player.inBus ? 'ESPAÇO para saltar do ônibus' : storm.stage === 'wait' ? `Tempestade fecha em ${fmt(Math.max(0, P.wait - storm.t))}` : storm.toR === 0 && storm.r < 6 ? 'Círculo final' : 'Tempestade fechando!');
   setT('viewMode', view === 1 ? '1ª pessoa' : '3ª pessoa');
   const w = sl?.w, scoped = input.ads && w?.scope && a.alive;
   setS($('scope'), 'opacity', scoped && camera.fov < w.fov + 8 ? '1' : '0');
@@ -1539,7 +1616,7 @@ function hud(dt) {
   setS(xh.children[2], 'left', `${-gap - 9}px`); setS(xh.children[3], 'left', `${+gap}px`);
   hitT -= dt; if (hitT <= 0) setS($('hitm'), 'opacity', '0');
   hurtT = Math.max(0, hurtT - dt); setS($('vign'), 'opacity', String(Math.max(hurtT, a.hp < 30 && a.alive ? .35 : 0)));
-  setS($('stormv'), 'opacity', a.alive && outside(a.pos, storm.c, storm.r) ? '1' : '0');
+  setS($('stormv'), 'opacity', a.alive && storm.on !== false && outside(a.pos, storm.c, storm.r) ? '1' : '0');
   for (const d of dirEls) { d.t = Math.max(0, d.t - dt); setS(d.e, 'opacity', String(Math.min(1, d.t))); }
   msgT -= dt; if (msgT <= 0) setS($('centerMsg'), 'opacity', '0');
   for (let i = dnums.length - 1; i >= 0; i--) {
@@ -1593,6 +1670,8 @@ const Sfx = {
   build() { this.noise(.12, 'lowpass', 900, 200, 1, .35); this.tone(120, 80, .1, 'square', .1); },
   pickup() { this.tone(520, 880, .12, 'sine', .2); },
   storm() { this.tone(70, 50, 1.2, 'sawtooth', .12); },
+  jump() { this.noise(.5, 'bandpass', 600, 1800, 1, .3); },
+  chute() { this.noise(.35, 'lowpass', 2500, 300, 1, .45); this.tone(180, 90, .2, 'triangle', .15); },
   glide(on) { if (this.ctx) this.wind.gain.setTargetAtTime(on ? .18 : 0, this.ctx.currentTime, .3); },
 };
 
@@ -1779,10 +1858,10 @@ function wallHit(s, d, send) {
 function myInfo() { const r = roster[meIdx]; return { name: r.name, color: r.color, charId: r.id }; }
 function sendSnaps() {
   const p = player; if (!p) return;
-  net.send({ t: 's', p: [r2(p.pos.x), r2(p.pos.y), r2(p.pos.z)], v: [r2(p.vel.x), r2(p.vel.y), r2(p.vel.z)], y: r2(p.yaw), pi: r2(p.pitch), k: slot(p)?.w.key || '', g: p.gliding ? 1 : 0, hp: Math.ceil(p.hp), sh: Math.ceil(p.sh) });
+  net.send({ t: 's', p: [r2(p.pos.x), r2(p.pos.y), r2(p.pos.z)], v: [r2(p.vel.x), r2(p.vel.y), r2(p.vel.z)], y: r2(p.yaw), pi: r2(p.pitch), k: slot(p)?.w.key || '', g: airState(p), hp: Math.ceil(p.hp), sh: Math.ceil(p.sh) });
   if (net.on && isHost()) {
     const b = [];
-    for (const a of actors) if (a.kind === 'bot' && a.alive) b.push([a.id, r2(a.pos.x), r2(a.pos.y), r2(a.pos.z), r2(a.vel.x), r2(a.vel.y), r2(a.vel.z), r2(a.yaw), r2(a.pitch), slot(a)?.w.key || '', a.gliding ? 1 : 0, Math.ceil(a.hp), Math.ceil(a.sh)]);
+    for (const a of actors) if (a.kind === 'bot' && a.alive) b.push([a.id, r2(a.pos.x), r2(a.pos.y), r2(a.pos.z), r2(a.vel.x), r2(a.vel.y), r2(a.vel.z), r2(a.yaw), r2(a.pitch), slot(a)?.w.key || '', airState(a), Math.ceil(a.hp), Math.ceil(a.sh)]);
     if (b.length) net.send({ t: 'b', b });
   }
 }
@@ -1792,11 +1871,12 @@ function setNetGun(a, k) {
 }
 function applyState(a, x, y, z, vx, vy, vz, yaw, pitch, k, g, hp, sh) {
   a.tp.set(x, y, z); a.vel.set(vx, vy, vz); a.tyaw = yaw; a.tpitch = pitch;
-  a.gliding = !!g; a.hp = hp; a.sh = sh; a.onGround = !a.gliding && Math.abs(vy) < 1;
+  a.gliding = g > 0; a.chute = g === 1; a.inBus = g === 2; a.hp = hp; a.sh = sh; a.onGround = !a.gliding && Math.abs(vy) < 1;
   setNetGun(a, k);
 }
 function remoteUpdate(a, dt) {
   if (!a.alive) return;
+  if (a.inBus) { busRide(a); return; }
   const k = 1 - Math.exp(-14 * dt);
   if (a.pos.distanceTo(a.tp) > 10) a.pos.copy(a.tp); else a.pos.lerp(a.tp, k);
   a.yaw += angDiff(a.yaw, a.tyaw) * k; a.pitch = lerp(a.pitch, a.tpitch, k);
@@ -1894,6 +1974,7 @@ function checkServer() {
 
 // ---------- Partida ----------
 function clearMatch() {
+  startBus(false);
   for (const a of actors) scene.remove(a.rig.root); actors.length = 0; player = null;
   for (const s of solids.filter(s => s.built)) removeSolid(s);
   $('feed').innerHTML = ''; dnums.forEach(n => n.el.remove()); dnums.length = 0;
@@ -1915,6 +1996,7 @@ function startMatch(m) {
   settings.diff = m.diff; settings.extra = m.extra;
   mrng = mulberry(m.seed); seq = 0;
   const meId = net.on ? net.id : 'me', hostRunsBots = isHost();
+  const drop = state.useBus !== false; startBus(drop);
   const chars = [...m.players.map(p => ({ id: p.charId, name: p.name, color: p.color, netId: p.id })),
     ...m.bots.map((b, i) => ({ id: b.charId, name: b.name, color: b.color, isBot: true, botId: 'b' + i }))];
   chars.forEach((ch, i) => {
@@ -1922,8 +2004,14 @@ function startMatch(m) {
     const a = makeActor(ch, kind, ch.isBot ? ch.botId : ch.netId);
     const ang = i / chars.length * TAU + mr(-.2, .2), r = mr(35, 90);
     a.pos.set(Math.cos(ang) * r, 75 + mr(0, 10), Math.sin(ang) * r); a.tp.copy(a.pos);
-    a.yaw = a.tyaw = Math.atan2(a.pos.x, a.pos.z); a.gliding = true;
-    if (a.isBot) {
+    a.yaw = a.tyaw = Math.atan2(a.pos.x, a.pos.z); a.gliding = true; a.chute = !drop;
+    if (drop) { a.inBus = true; a.yaw = a.tyaw = Math.atan2(-bus.dir.x, -bus.dir.z); busRide(a); }
+    if (a.isBot && drop) {
+      // cada bot salta num ponto do trajeto e plana até perto dali
+      a.bot.jumpAt = mr(1.5, bus.dur - 1);
+      const q = busAt(a.bot.jumpAt); a.bot.goal.set(clamp(q.x + mr(-30, 30), -HALF + 8, HALF - 8), 0, clamp(q.z + mr(-30, 30), -HALF + 8, HALF - 8)); a.bot.goalT = 25;
+      giveGun(a, GUNS[Math.floor(mrng() * GUNS.length)].key); a.mats = 60; a.wi = 0;
+    } else if (a.isBot) {
       const gang = ang + mr(-.4, .4), gr = clamp(r + mr(-25, 10), 8, 100);
       a.bot.goal.set(Math.cos(gang) * gr, 0, Math.sin(gang) * gr); a.bot.goalT = 20;
       giveGun(a, GUNS[Math.floor(mrng() * GUNS.length)].key); a.mats = 60; a.wi = 0;
@@ -1932,10 +2020,11 @@ function startMatch(m) {
   });
   player = actors.find(a => a.kind === 'me'); player.bloom = 0; player.camDist = 6;
   vmSleeve.color.set(player.ch.color);
-  resetStorm(); spawnLoot(); stormMesh.visible = true;
+  resetStorm(); spawnLoot(); stormMesh.visible = storm.on !== false;
+  if (drop) storm.t = -(bus.dur + 8); // a tempestade só começa a contar depois do voo do ônibus
   state.time = 0; state.mode = 'play';
   $('lobby').hidden = true; $('end').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
-  buildSlots(); showMsg('Plane até o chão', 'WASD para guiar · pouse perto de armas', 4);
+  buildSlots(); if (drop) showMsg('Você está no ônibus de batalha!', 'ESPAÇO para saltar · o paraquedas abre sozinho perto do chão', 5); else showMsg('Plane até o chão', 'WASD para guiar · pouse perto de armas', 4);
   requestLock();
 }
 function endGame(win, killer) {
@@ -2035,7 +2124,8 @@ function step(dt) {
     player.rig.tag.visible = false;
     updateStorm(dt); updateLoot(dt); updateFx(dt);
     for (const k in vm.guns) { const f = vm.guns[k].flash; if (f.visible) { f.userData.t -= dt; if (f.userData.t <= 0) f.visible = false; } }
-    Sfx.glide(player.alive && player.gliding);
+    Sfx.glide(player.alive && player.gliding && !player.inBus);
+    updateBus(dt);
     updateCamera(dt); hud(dt);
   } else if (state.mode === 'over') {
     for (const a of actors) { if (a.kind === 'bot' && a.alive) botUpdate(a, dt); if (a.kind === 'remote') remoteUpdate(a, dt); animateRig(a, dt); }
@@ -2087,7 +2177,7 @@ async function boot() {
   // só o boneco escolhido entra na abertura; os outros carregam depois, já no lobby
   const first = MODELS[roster[meIdx].id] ? [roster[meIdx].id] : [], later = Object.keys(MODELS).filter(k => !first.includes(k));
   const loadModel = k => loadB64(loader, MODELS[k]).then(m => { gltfs[k] = m; }).catch(e => console.warn('Modelo não carregou:', k, e));
-  let done = 0; const total = GUNS.length + first.length + 1;
+  let done = 0; const total = GUNS.length + first.length + Object.keys(PROPS).length + 1;
   const bar = () => { const p = Math.min(done / total, (performance.now() - t0) / INTRO); $('loadFill').style.width = (p * 100).toFixed(1) + '%'; $('loadTxt').textContent = `CARREGANDO ${Math.round(p * 100)}%`; return p; };
   const barLoop = () => { if (bar() < 1) requestAnimationFrame(barLoop); };
   barLoop();
@@ -2095,9 +2185,10 @@ async function boot() {
   await Promise.all([
     loadB64(loader, 'models/natureza.glb.txt').then(buildNature).catch(e => console.warn('Natureza não carregou:', e)).finally(tick),
     ...GUNS.map(g => loadB64(loader, 'models/armas/' + g.file + '.txt').then(m => prepGun(g, m)).catch(e => console.warn('Arma não carregou:', g.file, e)).finally(tick)),
+    ...Object.entries(PROPS).map(([k, url]) => loadB64(loader, url).then(m => { props[k] = m; }).catch(e => console.warn('Modelo não carregou:', k, e)).finally(tick)),
     ...first.map(k => loadModel(k).finally(tick)),
   ]);
-  drawMapBase(); setTab('play'); checkServer();
+  drawMapBase(); setTab('play'); checkServer(); buildBus();
   stormMesh.visible = false;
   await new Promise(r => setTimeout(r, Math.max(0, INTRO - (performance.now() - t0))));
   bar(); $('loadTxt').textContent = 'PRONTO!';
