@@ -1,16 +1,16 @@
 // Progressão do FireFriends: XP, níveis e o que cada nível desbloqueia.
 // Usado pelo jogo (lobby) e pelo servidor (que confere o que cada conta pode usar).
 
-// personagens: o Recruta é o boneco simples; os outros chegam com o nível
+// personagens: todos liberados desde o começo (pedido do Ruan); cores e acabamentos seguem por nível
 export const CHARS = [
   { id: 'recruta', name: 'Recruta', level: 1 },
-  { id: 'spice', name: 'Abóbora', level: 3 },
-  { id: 'jules', name: 'Jules', level: 4 },
-  { id: 'drift', name: 'Drift', level: 6 },
-  { id: 'snakeeyes', name: 'Snake Eyes', level: 8 },
-  { id: 'renegade', name: 'Renegade Raider', level: 10 },
-  { id: 'midas', name: 'Midas', level: 12 },
-  { id: 'masterchief', name: 'Master Chief', level: 15 },
+  { id: 'spice', name: 'Abóbora', level: 1 },
+  { id: 'jules', name: 'Jules', level: 1 },
+  { id: 'drift', name: 'Drift', level: 1 },
+  { id: 'snakeeyes', name: 'Snake Eyes', level: 1 },
+  { id: 'renegade', name: 'Renegade Raider', level: 1 },
+  { id: 'midas', name: 'Midas', level: 1 },
+  { id: 'masterchief', name: 'Master Chief', level: 1 },
 ];
 
 // cores do jogador (corpo do Recruta, plaquinha do nome e asa-delta)
@@ -64,6 +64,11 @@ export function unlocksAt(level) {
   const out = [];
   for (const c of CHARS) if (c.level === level && level > 1) out.push(c.name);
   for (const k of COLORS) if (k.level === level && level > 1) out.push('cor ' + k.name);
-  for (const c of CHARS) for (const s of SKINS) if (s.after && c.level + s.after === level) out.push(`${c.name} ${s.name}`);
+  for (const s of SKINS) {
+    if (!s.after) continue;
+    const cs = CHARS.filter(c => c.level + s.after === level);
+    if (cs.length === CHARS.length) out.push(`acabamento ${s.name} para todos`);
+    else for (const c of cs) out.push(`${c.name} ${s.name}`);
+  }
   return out;
 }
