@@ -357,6 +357,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import * as Conta from './conta.js';
 
 // Modelos do Tripo3D: coloque o .glb ao lado da página e registre pelo id do elenco.
 // Exemplo: ruan: 'models/ruan.glb'. Sem arquivo, o jogo usa o boneco provisório.
@@ -903,6 +904,7 @@ function makeActor(ch, kind, id) {
   const isPlayer = kind === 'me';
   const rig = makeRig(ch); scene.add(rig.root);
   if (gltfs[ch.id]) dressRig(rig, gltfs[ch.id]);
+  Conta.applySkin(rig.root, ch.skin, ch.color);
   return {
     id, kind, isBot: !!ch.isBot, tp: new V3(), tyaw: 0, tpitch: 0,
     ch, name: ch.name, isPlayer, rig, pos: new V3(), vel: new V3(), yaw: 0, pitch: 0, hp: 100, sh: 0, alive: true, onGround: false, gliding: true,
@@ -1755,27 +1757,29 @@ const motes = (() => {
 let lobbyTab = 'play', previewIdx = meIdx, spin = Math.PI - .45, spinVel = 0, dragX = null;
 // quem aparece nos pedestais: no modo offline só você; online, o grupo
 function partyMembers() {
-  if (!net.on) return [{ ...roster[meIdx], netId: 'me' }];
+  if (!net.on) return [{ ...roster[meIdx], ...myInfo(), id: roster[meIdx].id, netId: 'me' }];
   const ms = [...net.members].sort((a, b) => (b.id === net.id) - (a.id === net.id));
-  return ms.map(x => ({ id: x.charId, name: x.name, color: x.color, netId: x.id }));
+  return ms.map(x => ({ id: x.charId, name: x.name, color: x.color, skin: x.skin, netId: x.id }));
 }
 function placeOnPad(pad, ch) {
-  const key = ch ? ch.id + '|' + ch.name + '|' + (gltfs[ch.id] ? 1 : 0) : null;
+  const key = ch ? [ch.id, ch.name, ch.color, ch.skin, gltfs[ch.id] ? 1 : 0].join('|') : null;
   if (pad.key === key) return;
   if (pad.rig) { pad.g.remove(pad.rig.root); pad.rig = null; }
   pad.key = key; pad.plus.visible = !ch;
   if (!ch) return;
   const r = makeRig(ch); if (gltfs[ch.id]) dressRig(r, gltfs[ch.id]);
+  Conta.applySkin(r.root, ch.skin, ch.color);
   r.tag.visible = false; setRigGun(r, 'ar'); r.root.position.y = .22; r.idleT = rand(0, 6);
   r.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   pad.g.add(r.root); pad.rig = r;
 }
 function refreshPads() {
-  if (lobbyTab === 'locker') { placeOnPad(pads[0], roster[previewIdx]); for (let i = 1; i < pads.length; i++) { placeOnPad(pads[i], null); pads[i].g.visible = false; } }
+  if (lobbyTab === 'locker') { placeOnPad(pads[0], { ...roster[previewIdx], color: myInfo().color, skin: previewIdx === meIdx ? myInfo().skin : 'original' }); for (let i = 1; i < pads.length; i++) { placeOnPad(pads[i], null); pads[i].g.visible = false; } }
   else { const m = partyMembers(); pads.forEach((p, i) => { p.g.visible = i < 3; placeOnPad(p, m[i] || null); }); }
-  $('meDot').style.background = roster[meIdx].color; $('meName').textContent = roster[meIdx].name;
+  $('meDot').style.background = myInfo().color; $('meName').textContent = myInfo().name;
   $('lkName').textContent = roster[previewIdx].name;
-  $('equipBtn').textContent = previewIdx === meIdx ? 'Equipado' : 'Usar este';
+  const lock = Conta.lockOf(roster[previewIdx].id);
+  $('equipBtn').textContent = previewIdx === meIdx ? 'Equipado' : lock ? '🔒 Nível ' + lock : 'Usar este';
   const m = partyMembers();
   const lead = net.on ? net.hostId : 'me';
   $('partyList').innerHTML = Array.from({ length: Math.max(4, m.length) }, (_, i) => m[i]
@@ -1785,8 +1789,9 @@ function refreshPads() {
 function setTab(t) {
   lobbyTab = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  for (const n of ['play', 'locker', 'help']) $('pane-' + n).hidden = n !== t;
+  for (const n of ['play', 'locker', 'rank', 'help']) if ($('pane-' + n)) $('pane-' + n).hidden = n !== t;
   if (t === 'locker') previewIdx = meIdx;
+  if (t === 'rank') Conta.paintRanking();
   refreshPads(); renderRoster();
 }
 document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab); });
@@ -1797,6 +1802,7 @@ function renderRoster() {
       <input type="text" id="nm${i}" value="${esc(r.name)}" maxlength="18" aria-label="Nome do personagem ${i + 1}">
       <div class="row2"><button class="glb${gltfs[r.id] ? ' ok' : ''}" type="button" data-glb="${i}">${gltfs[r.id] ? 'modelo 3D ok' : 'enviar .glb'}</button></div>
     </div>`).join('');
+  Conta.decorateCards(roster);
 }
 let glbTarget = 0;
 function loadGlbFile(i, file) {
@@ -1817,7 +1823,19 @@ $('roster').addEventListener('click', e => {
   if (e.target.tagName === 'INPUT') { if (i !== previewIdx) { previewIdx = i; document.querySelectorAll('.card').forEach(x => x.classList.toggle('sel', +x.dataset.i === i)); refreshPads(); } return; }
   previewIdx = i; renderRoster(); refreshPads();
 });
-$('equipBtn').addEventListener('click', () => { meIdx = previewIdx; store.set('meId', roster[meIdx].id); net.send({ t: 'me', ...myInfo() }); renderRoster(); refreshPads(); });
+$('equipBtn').addEventListener('click', async () => {
+  const err = await Conta.equip({ char: roster[previewIdx].id });
+  $('lockMsg').textContent = err ? (Conta.lockOf(roster[previewIdx].id) ? `Libera no nível ${Conta.lockOf(roster[previewIdx].id)}. ` : '') + err : '';
+  if (err) return;
+  meIdx = previewIdx; store.set('meId', roster[meIdx].id); net.send({ t: 'me', ...myInfo() }); renderRoster(); refreshPads();
+});
+// conta entrou, saiu, subiu de nível ou trocou cor: o personagem escolhido vem dela
+Conta.onChange(() => {
+  const i = roster.findIndex(r => r.id === Conta.look().char);
+  if (i >= 0) meIdx = i;
+  if (state.mode === 'lobby') { renderRoster(); refreshPads(); }
+  net.send({ t: 'me', ...myInfo() });
+});
 $('glbFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadGlbFile(glbTarget, f); e.target.value = ''; });
 $('roster').addEventListener('dragover', e => { const c = e.target.closest('.card'); if (!c) return; e.preventDefault(); document.querySelectorAll('.card.drag').forEach(x => x !== c && x.classList.remove('drag')); c.classList.add('drag'); });
 $('roster').addEventListener('dragleave', e => { const c = e.target.closest('.card'); if (c && !c.contains(e.relatedTarget)) c.classList.remove('drag'); });
@@ -1877,7 +1895,10 @@ function wallHit(s, d, send) {
   if (send) net.send({ t: 'wh', id: s.id, d });
   if (s.hp <= 0) removeSolid(s);
 }
-function myInfo() { const r = roster[meIdx]; return { name: r.name, color: r.color, charId: r.id }; }
+function myInfo() {
+  const r = roster[meIdx], L = Conta.look();
+  return { name: Conta.logged() ? Conta.conta.perfil.name : r.name, color: Conta.colorHex(L.color), charId: r.id, skin: L.skin, token: Conta.conta.token || undefined };
+}
 function sendSnaps() {
   const p = player; if (!p) return;
   net.send({ t: 's', p: [r2(p.pos.x), r2(p.pos.y), r2(p.pos.z)], v: [r2(p.vel.x), r2(p.vel.y), r2(p.vel.z)], y: r2(p.yaw), pi: r2(p.pitch), k: slot(p)?.w.key || '', g: airState(p), hp: Math.ceil(p.hp), sh: Math.ceil(p.sh) });
@@ -1931,6 +1952,7 @@ function onNet(m) {
     }
     case 'full': updateOnlineUI('Essa sala está cheia (16 jogadores).'); break;
     case 'start': startMatch(m); break;
+    case 'xp': if ($('endXp')) $('endXp').textContent = Conta.onlineResult(m); break;
   }
   if (!inMatch) return;
   switch (m.t) {
@@ -2004,7 +2026,7 @@ function clearMatch() {
 function startGame() {
   const diff = +$('diff').value, extra = +$('extra').value;
   store.set('diff', diff); store.set('extra', extra);
-  const humans = net.on ? net.members : [{ id: 'me', ...myInfo() }];
+  const humans = net.on ? net.members : [{ id: 'me', ...myInfo(), token: undefined }];
   if (net.on && !isHost()) return;
   const used = new Set(humans.map(h => h.charId));
   const bots = [...roster.filter(r => !used.has(r.id)).map(r => ({ charId: r.id, name: r.name, color: r.color })),
@@ -2019,7 +2041,7 @@ function startMatch(m) {
   mrng = mulberry(m.seed); seq = 0;
   const meId = net.on ? net.id : 'me', hostRunsBots = isHost();
   const drop = state.useBus !== false; startBus(drop);
-  const chars = [...m.players.map(p => ({ id: p.charId, name: p.name, color: p.color, netId: p.id })),
+  const chars = [...m.players.map(p => ({ id: p.charId, name: p.name, color: p.color, skin: p.skin, netId: p.id })),
     ...m.bots.map((b, i) => ({ id: b.charId, name: b.name, color: b.color, isBot: true, botId: 'b' + i }))];
   chars.forEach((ch, i) => {
     const kind = ch.isBot ? (hostRunsBots ? 'bot' : 'remote') : ch.netId === meId ? 'me' : 'remote';
@@ -2060,6 +2082,9 @@ function endGame(win, killer) {
   $('endText').textContent = win ? `${p.kills} ${p.kills === 1 ? 'abate' : 'abates'}. Você foi o último de pé.`
     : killer ? `Eliminado por ${killer.name} · ${p.kills} ${p.kills === 1 ? 'abate' : 'abates'}` : `A tempestade te pegou · ${p.kills} ${p.kills === 1 ? 'abate' : 'abates'}`;
   $('end').hidden = false;
+  // XP: online a sala salva sozinha no fim; contra bots o jogo manda o resultado
+  $('endXp').textContent = !Conta.logged() ? 'Entre numa conta para guardar XP e subir de nível.' : net.on ? 'Resultado sai quando a partida acabar…' : 'Salvando…';
+  if (!net.on && Conta.logged()) Conta.sendSolo({ kills: p.kills, place: win ? 1 : p.place, win, total: actors.length }).then(t => { $('endXp').textContent = t; });
 }
 function toLobby() {
   clearMatch(); state.mode = 'lobby';
@@ -2211,7 +2236,7 @@ async function boot() {
     ...Object.entries(PROPS).map(([k, url]) => loadB64(loader, url).then(m => { props[k] = m; }).catch(e => console.warn('Modelo não carregou:', k, e)).finally(tick)),
     ...first.map(k => loadModel(k).finally(tick)),
   ]);
-  drawMapBase(); setTab('play'); checkServer(); buildBus();
+  drawMapBase(); setTab('play'); checkServer(); Conta.start(); buildBus();
   stormMesh.visible = false;
   await new Promise(r => setTimeout(r, Math.max(0, INTRO - (performance.now() - t0))));
   bar(); $('loadTxt').textContent = 'PRONTO!';
